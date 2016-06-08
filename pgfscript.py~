@@ -17,9 +17,9 @@ except IndexError:
 def figsize(scale):
     fig_width_pt = 523.5307              # Get this from LaTeX using \the\textwidth
     inches_per_pt = 1.0/72.27                       # Convert pt to inch
-   # golden_mean = (np.sqrt(5.0)-1.0)/2.0            # Aesthetic ratio (you could change this)
+    golden_mean = (np.sqrt(5.0)-1.0)/2.0            # Aesthetic ratio (you could change this)
     fig_width = fig_width_pt*inches_per_pt*scale    # width in inches
-    fig_height = fig_width*0.75 #golden_mean              # height in inches
+    fig_height = fig_width*golden_mean              # height in inches
     fig_size = [fig_width,fig_height]
     return fig_size
 
@@ -71,7 +71,7 @@ krms = np.loadtxt(os.path.join(ddir, 'power_krms.dat')).flatten()[:dim.nxgrid//2
 p0 = (-15.56, 2.20, 4.26)
 
 # Simple plot
-fig, ax  = newfig(0.45)
+fig, ax  = newfig(0.49)
 ax.set_yscale('log')
 ax.set_xscale('log')
 ax.set_ylim(1e-13, 1e-3)
@@ -91,7 +91,7 @@ for p, pb in enumerate(powerb):
         ax.plot(krms[xi2], pb[xi2], "o", color='blue')
         ax.plot(krms[xi1:xi2], 10**parabola(np.log10(krms[xi1:xi2]), *po), color='blue')#, color=clrs[i])
 
-fig.tight_layout(pad=.3)
+fig.tight_layout()
 ax.legend(loc = 'upper left', frameon=False)
 
 savefig('nonhel_k_180_mag_spec')
