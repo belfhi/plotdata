@@ -55,6 +55,7 @@ def to_times(s):
     return r'{0}\times 10^{{{1}}}'.format(s1, s2)
 
 def plot_grid_spectra(ax, i):
+    print(i)
     plottimes = []
     for t in [0,.1, .2, .5, 1,2,5,10, 20, 50, 100,200]:
         ti = search_indx(tb_ges[i], t, eps= 0.1)
@@ -72,21 +73,23 @@ print(dirs)
 
 pb_ges = []
 tb_ges = []
-dd_visc = {}
+pr_numbers = {}
 for dd in dirs:
     tb, powerb = pc.read_power('power_mag.dat', datadir=dd)
-    nu_numeric = float(dd.split('_')[-1])
+    pr_numeric = float(dd.split('_')[-1])
     #print(nu_numeric)
-    dd_visc[dd] = nu_numeric
+    pr_numbers[dd] = pr_numeric
     pb_ges.append(powerb)
     tb_ges.append(tb)
+
+print('tb_ges has : %i indices' % len(tb_ges))
 
 dim = pc.read_dim(datadir=dirs[0])
 krms = np.loadtxt(path.join(dirs[0],'power_krms.dat')).flatten()[:dim.nxgrid//2]
 
 fig = plt.figure(figsize=fsize(.95))#figsize(width)
 
-grid = Grid(fig, rect=[.08,.1,.9,.85], nrows_ncols=(2,3),
+grid = Grid(fig, rect=[.08,.1,.9,.85], nrows_ncols=(2,2),
             axes_pad=0., label_mode='L',
             )
 strings = [r'$\nu_3 = %s$', r'$\nu_3 = %s$', r'$\nu = %s$', r'$\nu = %s$', r'$\nu = %s$', r'$\nu = %s$']
