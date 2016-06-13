@@ -1,4 +1,4 @@
-   250.0000               5
+   350.0000               7
  This file is written automatically (routine
  check_snaptime in sub.f90). The values above give
  time and number of the *next* snapshot. These values
