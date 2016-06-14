@@ -18,6 +18,7 @@ parser.add_argument('-g', '--gridplot', action='store_true', default=False, help
 parser.add_argument('-v', '--verbose', action='store_true', default=False, help='add verbosity')
 parser.add_argument('-f', '--fit', action='store_false', default=True, help="don't fit a parabola")
 parser.add_argument('-p', '--peak', action='store_true', default=False, help="make a plot of peak evolution")
+parser.add_argument('-n', "--ncol", type=int, default=2, help="amount of columns in legend")
 
 args = parser.parse_args()
 
@@ -81,15 +82,21 @@ def to_times(s):
 def setup_specax(ax):
     ax.set_yscale('log')
     ax.set_xscale('log')
-    ax.set_ylim(powerb[1,1], 1.5*powerb[0,:].max())
+    i = 1 if args.ddir.startswith('delta') else 0
+    ax.set_ylim(powerb[i+1,1], 1.5*powerb[i,:].max())
     ax.set_xlim(1,dim.nxgrid//2)
     ax.set_xlabel('k mode')
     ax.set_ylabel(r'$E_{mag}$')
 
 def get_plottimes(tb):
     ptimes = []
-    #for t in [0,.1,1,10,200]:
-    for t in [0, 1, 10, 100]:
+    if args.ddir.startswith('delta'):
+        pptimes = [0,.1, 1, 10,200]
+    elif args.gridplot and args.ddir.startswith('prandtl'):
+        pptimes = [0,1,10,50, 300]
+    else:
+        pptimes = [0,1,20,200]
+    for t in pptimes:
         ti = search_indx(tb, t, eps= 0.02)
         if ti is not None:
             ptimes.append(ti)
@@ -128,17 +135,19 @@ def make_specplot(fig, ax):
     kmax = []
     maxx = []
     for p, pb in enumerate(powerb):
-        if p == 0 and args.ddir.startswith('delta'):
+        if not (p == 0 and args.ddir.startswith('delta')):
+            xi = np.where( pb == pb.max())[0][0]; xi1 = xi - xi//3; xi2 = xi + xi//3
+            if args.fit:
+                po, pco = curve_fit(parabola, np.log10(krms[xi1:xi2]), np.log10(pb[xi1:xi2]), p0=p0)
+                kmax.append(10**(po[1]))
+                maxx.append(max(pb))
+        else:
+            ax.plot(krms[1:], pb[1:], color=plt.cm.Paired(next(clrindx)), linewidth=1.5)
             continue
-        xi = np.where( pb == pb.max())[0][0]; xi1 = xi - xi//3; xi2 = xi + xi//3
-        if args.fit:
-            po, pco = curve_fit(parabola, np.log10(krms[xi1:xi2]), np.log10(pb[xi1:xi2]), p0=p0)
-            kmax.append(10**(po[1]))
-            maxx.append(max(pb))
         #print(xi, xi1, xi2)
         if p in plottimes:
-            #s = 't = %.1f' if tb[p] < 1.0 else 't = %.0f'
-            s = 't = %.0f'
+            s = 't = %.1f' if tb[p] < 1.0 else 't = %.0f'
+            #s = 't = %.0f'
             ax.plot(krms[1:], pb[1:], label=s % tb[p], color=plt.cm.Paired(next(clrindx)), linewidth=1.5)
             #ax.plot(krms[xi1], pb[xi1], "o", color='blue')
             #ax.plot(krms[xi2], pb[xi2], "o", color='blue')
@@ -146,37 +155,42 @@ def make_specplot(fig, ax):
     if args.peak:
         fig2, ax2 = newfig(fwidth)
         tax2 = ax2.twinx()
-        setup_tsplot(ax2, xlim=(.1, 200))
+        setup_tsplot(ax2, xlim=(tb[1], 200))
         tax2.set_yscale('log')
         if args.verbose: 
-            print('tb: %i, len(kmax): %i' % (tb.shape, len(kmax)))
-        lns1 = ax2.plot(tb[1:], kmax, label=r'$k_{\textrm{max}}$', linewidth=2, color='black')
+            print('tb: %i, len(kmax): %i' % (tb.shape[0], len(kmax)))
+        i = 1 if args.ddir.startswith('delta') else 0
+        ppo, ppcov = curve_fit(linear, np.log10(tb[i+10:]), np.log10(kmax[10:]))
+        ppo1, ppcov1 = curve_fit(linear, np.log10(tb[i+1:]), np.log10(maxx[1:]))
+        lns4 = tax2.plot(tb[1:], powerlaw(tb[1:], 10**(ppo1[0]), ppo1[1], x0=0.), color='green', label=r'fit: $k\sim t^{%.1f}$' % ppo1[1])
+        lns3 = ax2.plot(tb[1:], powerlaw(tb[1:], 10**(ppo[0]), ppo[1], x0=0.), label=r'fit: $k\sim t^{%.1f}$' % ppo[1])
+        lns1 = ax2.plot(tb[i:], kmax, label=r'$k_{\textrm{max}}$', linewidth=2, color='black')
+        lns2 = tax2.plot(tb[i:], maxx, '--', color='black', linewidth=2, label='Spectrum Max value')
         ax2.set_ylabel(r'$k_{\textrm{max}}$')
-        lns2 = tax2.plot(tb[1:], maxx, '--', color='black', linewidth=2, label='maxval(t)')
-        ppo, ppcov = curve_fit(linear, np.log10(tb[11:]), np.log10(kmax[10:]))
+        #tax2.set_ylabel('max(E(k,t))')
         if args.verbose: 
-            print(ppo)
-        lns3 = tax2.plot(tb[1:], powerlaw(tb[1:], 10**(ppo[0]), ppo[1], x0=0.))
-        lns = lns1 + lns2
+            print(ppo, ppo1)
+        lns = lns1 + lns3 + lns2 + lns4
         labs = [l.get_label() for l in lns]
-        ax2.legend(lns, labs, loc='lower left', frameon=False)
+        ax2.legend(lns, labs, loc='lower left', ncol=1, frameon=False)
         fig2.tight_layout(pad=0.3)
-        savefig(fig2, args.ddir + '_peak.pdf')
+        savefig(fig2, args.ddir + '_peak')
 
 def make_tsplot(fig, ax):
-    ax.plot(tser.t, tser.brms, label=r'$B_{rms}$')
-    ax.plot(tser.t, tser.urms, label=r'$u_{rms}$')
+    ax.plot(tser.t, tser.brms, label=r'$B_{rms}$', linewidth=1.5)
+    ax.plot(tser.t, tser.urms, label=r'$u_{rms}$', linewidth=1.5)
     ti = search_indx(tser.t, 10., eps=.05)
     if args.verbose: print(ti)
     if ti is not None:
         po1, pco1 = curve_fit(lambda x, a, b: powerlaw(x, a, b, x0=0), tser.t[ti:], tser.brms[ti:])
         po2, pco2 = curve_fit(lambda x, a, b: powerlaw(x, a, b, x0=0), tser.t[ti:], tser.urms[ti:])
-        ax.plot(tser.t[10:], powerlaw(tser.t[10:],*po1))
+        ax.plot(tser.t[10:], powerlaw(tser.t[10:],*po1), linewidth=1.5, label=r'fit: $B\sim t^{%.1f}$' % po1[1])
 
 def setup_tsplot(ax, xlim=None):
     ax.set_yscale('log')
     ax.set_xscale('log')
     ax.set_xlabel('time')
+    ax.set_ylabel('$B [v_A]\ u [c_s]$')
     if xlim is None:
         xlim = (1e-2, tser.t[-1])
     ax.set_xlim(xlim)
@@ -205,14 +219,18 @@ import matplotlib.pyplot as plt
 
 # read data
 if args.spectra:
-    tb, powerb = pc.read_power('power_mag.dat', datadir=args.ddir)
+    try:
+        powerb = np.loadtxt(path.join(args.ddir,'powertot.dat'))
+        tb = np.loadtxt(path.join(args.ddir,'ttot.dat'))
+    except FileNotFoundError:
+        tb, powerb = pc.read_power('power_mag.dat', datadir=args.ddir)
     if args.verbose: print('t.shape: ',tb.shape, ' last spectrum: ',tb[-1])
     p0 = (-15.56, 2.20, 4.26)
 
 # Setup Figure and Axes
 fwidth = 0.45
-if args.peak:
-    args.tsplot = True
+#if args.peak:
+#    args.tsplot = True
 
 if args.tsplot:
     fig, ax  = newfig(fwidth)
@@ -251,7 +269,11 @@ if not ( args.tsplot or args.spectra or args.gridplot):
     sys.exit(1)
 
 if not args.gridplot: 
-    ax.legend(loc='lower center', ncol=2, frameon=False)
+    if args.tsplot:
+        ax.legend(loc='lower left', ncol=1, frameon=False)
+        print('legend low left')
+    else:
+        ax.legend(loc='lower center', ncol=args.ncol, frameon=False)
     fig.tight_layout(pad=.3)
 
 if args.ddir.endswith('/'):

@@ -65,11 +65,11 @@ from os import listdir, path
 from scipy.optimize import curve_fit
 
 
-dirs = [s for s in listdir('.') if path.isdir(s) and not s.startswith('prandtl') ].sort()
+dirs =sorted( [s for s in listdir('.') if path.isdir(s) and s.startswith('prandtl_')], key=lambda s: float(s.split('_')[1]))
 print(dirs)
 
-dim = pc.read_dim(datadir='pr=1/data')
-krms = np.loadtxt('pr=1/data/power_krms.dat').flatten()[:dim.nxgrid//2]
+dim = pc.read_dim(datadir='prandtl_1e0')
+krms = np.loadtxt('prandtl_1e0/power_krms.dat').flatten()[:dim.nxgrid//2]
 print(krms.shape)
 p0 = (-12.92758524, 1.94666781, 3.4643292)  #(-15.56, 2.20, 4.26)
 
@@ -81,18 +81,12 @@ ax.set_xlim(.1,100)
 ax.set_ylim(10,100)
 for dd in dirs:   
     kmax = []
-    if dd == 'pr=100':
-        ddir = path.join(dd, 'old_data')
-    elif dd == 'pr=1':
-        ddir = path.join(dd, 'old2')
+    dim = pc.read_dim(datadir=dd)
+    if dd not in [ 'prandtl_1e2', 'prandtl_1e0']:
+        t, powerb = pc.read_power('power_mag.dat', datadir=dd)
     else:
-        ddir = path.join(dd, 'data')
-    dim = pc.read_dim(datadir=ddir)
-    if dd != 'pr=1':
-        t, powerb = pc.read_power('power_mag.dat', datadir=ddir)
-    else:
-        t = np.loadtxt(path.join(dd, 'tb_resulting.dat'))
-        powerb = np.loadtxt(path.join(dd, 'powerb_resulting.dat'))
+        t = np.loadtxt(path.join(dd, 'tb_res.dat'))
+        powerb = np.loadtxt(path.join(dd, 'powerb_res.dat'))
         print(t.shape, powerb.shape)
     for p,pb in enumerate(powerb):
         xi = np.where( pb == pb.max())[0][0]; xi1 = xi - xi//2; xi2 = xi + xi//3
@@ -101,14 +95,14 @@ for dd in dirs:
         #    print(10**po[1])
         kmax.append(10**po[1])
     print(dd, len(kmax), t.shape)
-    ax.plot(t, kmax, label='$%s$' %dd, linewidth=2.5)
+    ax.plot(t, kmax, label='Pr $=%i$' %int(float(dd.split('_')[1])), linewidth=2)
 ax.set_xlabel('time t')
 ax.set_ylabel('$k_{max}$')
 ax.set_yscale('log')
 ax.set_yticks([10,20,50,100])
 ax.set_yticklabels(['$10$','$20$','$50$','$100$'])
-ax.legend(loc='lower center', ncol=4, prop={'size':20}, frameon=False)
-fig.suptitle('Wavenumber of Maximum for different Prandtl Numbers', fontsize=24)
+ax.legend(loc='lower left', ncol=1, frameon=False)
+fig.suptitle('Wavenumber of Maximum ')
 
 ax.set_xlabel('time')
 ax.set_ylabel(r'$k_{\textrm{max}}$')
