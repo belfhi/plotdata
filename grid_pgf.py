@@ -54,12 +54,17 @@ def to_times(s):
     s1, s2 = s.split('e')
     return r'{0}\times 10^{{{1}}}'.format(s1, s2)
 
-def plot_grid_spectra(ax, i):
-    plottimes = []
+def get_plottimes(tb):
+    ptimes = []
     for t in [0,.1, .2, .5, 1,2,5,10, 20, 50, 100,200]:
-        ti = search_indx(tb_ges[i], t, eps= 0.01)
-        plottimes.append(ti)
+        ti = search_indx(tb, t, eps= 0.01)
+        ptimes.append(ti)
     #print(plottimes)
+    return ptimes
+
+
+def plot_grid_spectra(ax, i):
+    plottimes = get_plottimes(tb_ges[i])
     for p, pb in enumerate(pb_ges[i]):
         if p in plottimes:
             ax.loglog(krms, pb)

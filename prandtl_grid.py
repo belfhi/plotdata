@@ -55,14 +55,17 @@ def to_times(s):
     return r'{0}\times 10^{{{1}}}'.format(s1, s2)
 
 def plot_grid_spectra(ax, i):
-    print(i)
+    #print(i)
     plottimes = []
-    for t in [0,.1, .2, .5, 1,2,5,10, 20, 50, 100,200]:
-        ti = search_indx(tb_ges[i], t, eps= 0.1)
-        plottimes.append(ti)
+    for t in [0,1,2,5,10, 20, 50, 100,200]:
+        ti = search_indx(tb_ges[i], t, eps= 0.02)
+        if ti is not None:
+            plottimes.append(ti)
+    #print('%s has %i lines' % (dirs[i],len(plottimes)))
     #print(plottimes)
     for p, pb in enumerate(pb_ges[i]):
         if p in plottimes:
+            #print('plotting',dd, p)
             ax.loglog(krms, pb)
     ax.set_xlim(1,dim.nxgrid//2)
     ax.set_ylim(pb_ges[i][0,1], 1.5*pb_ges[i][0,:].max())
@@ -82,7 +85,7 @@ for dd in dirs:
     pb_ges.append(powerb)
     tb_ges.append(tb)
 
-print('tb_ges has : %i indices' % len(tb_ges))
+#print('tb_ges has : %i indices' % len(tb_ges))
 
 dim = pc.read_dim(datadir=dirs[0])
 krms = np.loadtxt(path.join(dirs[0],'power_krms.dat')).flatten()[:dim.nxgrid//2]
@@ -92,15 +95,15 @@ fig = plt.figure(figsize=fsize(.95))#figsize(width)
 grid = Grid(fig, rect=[.08,.1,.9,.85], nrows_ncols=(2,2),
             axes_pad=0., label_mode='L',
             )
-strings = [r'$\nu_3 = %s$', r'$\nu_3 = %s$', r'$\nu = %s$', r'$\nu = %s$', r'$\nu = %s$', r'$\nu = %s$']
+strings = [r'$\textrm{Pr} = %i$', r'$\textrm{Pr} = %i$', r'$\textrm{Pr} = %i$', r'$\textrm{Pr} = %i$']
 
 for i,ax in enumerate(grid):
     plot_grid_spectra(ax, i)
     ax.title.set_visible(False)
-    ax.text(1.5, 2e-4, strings[i] % to_times(dirs[i].split('_')[-1]))
+    ax.text(1.5, 1e-4, strings[i] % int(float(dirs[i].split('_')[-1])))
 
 
-fig.text(0.5, 0.01, 'k mode', ha='center')
+fig.text(0.52, 0.01, 'k mode', ha='center')
 fig.text(0.01, 0.5, r'$E_{mag}$', va='center', rotation='vertical')
 
 savefig('grid_prandtl_spec')

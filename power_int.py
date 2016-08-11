@@ -4,13 +4,16 @@ import numpy as np
 import matplotlib as mpl
 import sys
 from scipy.integrate import romb, simps
+import argparse
 mpl.use('pgf')
 
-try:  
-    dstart = sys.argv[1]
-except IndexError:
-    print('must give directory')
-    sys.exit(1)
+parser = argparse.ArgumentParser()
+parser.add_argument('ddir', default='', type=str, help='datadir directory')
+parser.add_argument('-v', '--verbose', action='store_true', default=False, help='add verbosity')
+parser.add_argument('-hel', '--helical', action='store_true', default=False, help='plot the helical line too')
+args = parser.parse_args()
+
+dstart = args.ddir
 
 def figsize(scale, ratio=None):
     fig_width_pt = 523.5307                         # Get this from LaTeX using \the\textwidth
@@ -65,6 +68,10 @@ def nu_string(dd):
     ds = dd.split('_')
     if 'hyper' in ds:
         return r'$\nu_3=%s$' % to_times(ds[-1])
+    elif 'nonhel' in ds:
+        return r'$k_{max}=%s$' % ds[1][1:]
+    elif dd == 'helical':
+        return 'helical'
     else:
         return r'$\nu=%s$' % to_times(ds[-1])
 
@@ -88,10 +95,13 @@ from scipy.optimize import curve_fit
 dirs = [s for s in listdir('.') if isdir(s) and s.startswith(dstart) and not isfile(join(s,'NOPLOT'))]
 if len(dirs) > 1:
     try:
-        dirs = sorted(dirs, key=lambda s: float(s.split('_')[-1]))
+        dirs = sorted(dirs, key=lambda s: float(s.split('_')[-1]), reverse=True)
     except ValueError:
         dirs = sorted(dirs)
-print(dirs)
+if args.helical:
+    dirs.append('helical')
+if args.verbose:
+    print(dirs)
 clrindx = iter(np.linspace(0,1,len(dirs)))
 
 dim = pc.read_dim(datadir='prandtl_1e0')
@@ -110,14 +120,17 @@ for dd in dirs:
         tstop = 0.1
     if dstart.startswith('delta'):
         tstop = 1.
-    print('dir: ', dd)
+    if args.verbose:
+        print('dir: ', dd)
     try:
-        t = np.loadtxt(join(dd,'tb_res.dat'))
-        powerb = np.loadtxt(join(dd,'powerb_res.dat'))
-        print('reading concatenated data files')
+        t = np.loadtxt(join(dd,'ttot.dat'))
+        powerb = np.loadtxt(join(dd,'powertot.dat'))
+        if args.verbose:
+            print('reading concatenated data files')
     except FileNotFoundError:
         t, powerb = pc.read_power('power_mag.dat', datadir=dd)
-    print('%.1f %.1f %.1f' %(t[0], t[1], t[-1]))
+    if args.verbose:
+        print('%.1f %.1f %.1f' %(t[0], t[1], t[-1]))
     kmax = 7 # arbitrary value
     dim = pc.read_dim(datadir=dd)
     emax = []
@@ -130,16 +143,24 @@ for dd in dirs:
     tvals = len(t)-len(emax1)
     #ll = '$k^{%g}$' % float(dd[1:]))
     #ll = r'$\nu=%s$' % to_times(dd.split('_')[-1]))
-    print(t.shape, emax1.shape)
-    ax.plot(t[tvals:], emax1, label=nu_string(dd), color=plt.cm.Paired(next(clrindx)), linewidth=1.5)
+    if args.verbose:
+        print(t.shape, emax1.shape)
+    clr = plt.cm.Paired(next(clrindx))
+    if args.verbose:
+        print('clr: %.1f, %.1f, %.1f, %.1f' % clr)
+    ax.plot(t[tvals:], emax1, label=nu_string(dd), color=clr, linewidth=1.5)
 
 ax.set_xscale('log')
 ax.set_yscale('log')
 ax.set_xlim(tstop,t[-1])
-ax.set_ylim(.1, 40)
+if not args.helical:
+    ax.set_ylim(1e-1, 1e2)
 #ax.set_yticks([10,20,50,100])
 #ax.set_yticklabels(['$10$','$20$','$50$','$100$'])
-ax.legend(loc='lower left', ncol=2, frameon=False)
+if not args.verbose:
+    ax.legend(loc='lower left', ncol=2, frameon=False)
+else:
+    ax.legend(loc='upper left', ncol=1, fancybox=True, framealpha=0.5)
 #fig.suptitle('Wavenumber of Maximum ')
 
 ax.set_xlabel('time')
@@ -149,5 +170,7 @@ if dstart[-1] == '_':
     filename = dstart +'energy_increase'
 else:
     filename = dstart + '_energy_increase'
-print(filename)
+if args.verbose:
+    print(filename)
 savefig(filename)
+print('SUCCESS')

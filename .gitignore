@@ -1,5 +1,5 @@
 *.pyc
-*.swap
+*.swp
 *.bak
 *.tex
 *.aux
@@ -10,3 +10,5 @@ __*
 *.pdf
 *.pgf
 *.png
+NOPLOT
+*.noscale
