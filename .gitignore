@@ -6,7 +6,7 @@
 *.log
 *.toc
 *.py~
-__*
+__pycache__/
 *.pdf
 *.pgf
 *.png
