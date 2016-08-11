@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 import numpy as np
 import matplotlib as mpl
-from os import path, listdir
+from os import path, listdir, getcwd
+import sys
 mpl.use('pgf')
 
+print(sys.argv[0])
+pathname = path.dirname(sys.argv[0])
+fullpath = path.abspath(pathname)
 def figsize(scale, ratio=None):
     fig_width_pt = 523.5307                          # Get this from LaTeX using \the\textwidth
     inches_per_pt = 1.0/72.27                       # Convert pt to inch
@@ -24,7 +28,7 @@ pgf_with_latex = {                      # setup matplotlib to use latex for outp
     "font.sans-serif": [],
     "font.monospace": [],
     "axes.labelsize": 10,               # LaTeX default is 10pt font.
-    "text.fontsize": 10,
+    "font.size": 10,
     "legend.fontsize": 8,               # Make the legend/label fonts a little smaller
     "xtick.labelsize": 8,
     "ytick.labelsize": 8,
@@ -39,9 +43,9 @@ mpl.rcParams.update(pgf_with_latex)
 import matplotlib.pyplot as plt
 
 # I make my own newfig and savefig functions
-def newfig(width):
+def newfig(width, ratio=None):
     plt.clf()
-    fig = plt.figure(figsize=figsize(width))
+    fig = plt.figure(figsize=figsize(width, ratio))
     ax = fig.add_subplot(111)
     return fig, ax
 
@@ -51,34 +55,34 @@ def savefig(filename):
 
 
 # Simple plot
-fig, ax1  = newfig(0.6)
+fig, ax1  = newfig(0.45, ratio=.75)
 
 
-specfiles = sorted(filter(lambda s: s.startswith('magspec_'), listdir('.')))
+specfiles = sorted(filter(lambda s: s.startswith('magspec_'), listdir(fullpath)))
 print(specfiles)
+ptimes = [0, 1, 5, 10, 100]
+clrindx = iter(np.linspace(0,1,len(ptimes)))
 
 for magsp in specfiles:
-    with open(magsp) as magf:
+    with open(path.join(pathname, magsp)) as magf:
         t = float(magf.readline())
         #print(t)
-        if t == 0.0:
-            t += 0.1
         spec = [float(x) for x in magf.readlines()]
-    if round(t,1) in [0.1, 1, 5, 10, 100]:
-        s = 't = %.1f'  if t <= 0.1 else 't = %.0f'
-        ax1.plot( spec, label=s%t, linewidth=1.5)    spec = []
+    if round(t,1) in ptimes:
+        s = 't = %.0f'  if t <= 0.1 else 't = %.0f'
+        ax1.plot( spec, label=s%t, linewidth=1.5, color=plt.cm.Paired(next(clrindx)))
 ax1.set_xscale('log')
 ax1.set_yscale('log')
 ax1.set_xlabel('k mode')
 ax1.set_ylabel('$E_{mag}(k)$')
 ax1.set_xlim(1,256)
 ax1.set_ylim(1e-9, 1e-4)
-ax1.plot(range(20,100), [1e-3*x**-2 for x in range(20,100)], color='black', linewidth=2)
-ax1.text(30,1e-7, '$\propto k^{-2}$')
-ax1.legend(loc='center left', bbox_to_anchor=(1.,.5), prop={'size':16}, frameon=False)
+#ax1.plot(range(20,100), [1e-3*x**-2 for x in range(20,100)], color='black', linewidth=2)
+#ax1.text(30,1e-7, '$\propto k^{-2}$')
+ax1.legend(loc='upper left',frameon=False)
 fig.tight_layout(pad=0.3)
 #fig.suptitle('Zeus-MP2 Run, $512^3$', fontsize=24)
-savefig('zeus_mp2_pencil_init')
+savefig(path.join(getcwd(), 'zeus_mp2_pencil_init'))
 #ff = h5py.File('Combined/hdfaa.010')
 #mag1 = ff.get('i_mag_field')
 #mag2 = ff.get('j_mag_field')
