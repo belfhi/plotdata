@@ -23,6 +23,7 @@ parser.add_argument('-p', '--peak', action='store_true', default=False, help="ma
 parser.add_argument('-n', "--ncol", type=int, default=2, help="amount of columns in legend")
 parser.add_argument('-d', "--demo", action='store_true', default=False, help="demonstrate the fitting method")
 parser.add_argument('-k', "--kinetic", action='store_true', default=False, help="make kinetic spectra")
+parser.add_argument('-l', "--light", action='store_true', default=False, help="Light color scheme")
 
 args = parser.parse_args()
 figdir = 'figures'
@@ -30,6 +31,9 @@ figdir = 'figures'
 # need fit arg for peak:
 if args.peak:
     args.fit = True
+
+if args.ddir[-1] == '/':
+    args.ddir = args.ddir[:-1]
 
 def round_exp(num, prec=0):
     formatstr = '%.{0}e'.format(prec)
@@ -74,12 +78,13 @@ def check_figdir(directory):
 def read_power_data(ddir):
     if args.ddir[:4] == 'zeus':
         tb, powb = read_zeus_data(args.ddir)
-    try:
-        powb = np.loadtxt(path.join(ddir,'powertot.dat'))
-        tb = np.loadtxt(path.join(ddir,'ttot.dat'))
-        if args.verbose: print('reading powertot.dat File')
-    except FileNotFoundError:
-        tb, powb = pc.read_power('power_mag.dat', datadir=ddir)
+    else:
+        try:
+            powb = np.loadtxt(path.join(ddir,'powertot.dat'))
+            tb = np.loadtxt(path.join(ddir,'ttot.dat'))
+            if args.verbose: print('reading powertot.dat File')
+        except FileNotFoundError:
+            tb, powb = pc.read_power('power_mag.dat', datadir=ddir)
     if args.verbose: print('t.shape: %i, last spectrum: %.f' %(tb.shape[0], tb[-1]))
 
     return tb, powb
@@ -119,7 +124,9 @@ def setup_specax(ax):
     ax.set_xlim(1,dim.nxgrid//2)
     ax.set_xlabel('k mode')
     if args.kinetic:
-        ax.set_ylabel(r'$E_K(k,t)$')
+        ax.set_ylabel(r'$E(k,t)$')
+        ax.text(.05,.95, 'solid: magnetic\ndashed: kinectic', transform=ax.transAxes, 
+                horizontalalignment='left', verticalalignment='top')
     else:  
         ax.set_ylabel(r'$E_B(k,t)$')
     
@@ -134,7 +141,7 @@ def get_plottimes(tb):
     if args.ddir.startswith('delta'):
         pptimes = [0,.1, 1, 10,200]
     elif args.ddir.startswith('nonhel') and tb[-1] > 300:
-        pptimes = [0,5,50,300]
+        pptimes = [1,5,50,300]
     elif args.gridplot and args.ddir.startswith('prandtl'):
         pptimes = [0,1,10,50, 300]
     elif args.gridplot and args.ddir.startswith('visc'):
@@ -145,7 +152,7 @@ def get_plottimes(tb):
         pptimes = [0,1,10,100]
     else:
         #pptimes = [1,10,50,300]
-        pptimes = [0,1,5,20,100]
+        pptimes = [0,1,10,100]
         #pptimes = [ round(x) for x in np.logspace(0,np.log10(tb[-1]), 4)]
     for t in pptimes:
         ti = search_indx(tb, t, eps= 0.05)
@@ -194,7 +201,7 @@ def plot_spectra(ax, ddir):
     clrindx = iter(np.linspace(0,1,len(plottimes)))
     for p, pb in enumerate(powerb):
         if p in plottimes:
-            clr = plt.cm.Paired(next(clrindx))
+            clr = cscheme(next(clrindx))
             if args.verbose: print('clr: %.1f, %.1f, %.1f, %.1f' % clr)
             ax.loglog(krms, pb, linewidth=1.5, color=clr)
     ax.set_xlim(1,dim.nxgrid//2)
@@ -220,7 +227,7 @@ def make_specplot(fig, ax, powerarr, kin=False):
                 kmax.append(10**(po[1]))
                 maxx.append(max(pb))
         else:
-            ax.plot(krms[1:], pb[1:], color=plt.cm.Paired(next(clrindx)), linewidth=1.5)
+            ax.plot(krms[1:], pb[1:], color=cscheme(next(clrindx)), linewidth=1.5)
             continue
         #print(xi, xi1, xi2)
         if p in plottimes:
@@ -229,7 +236,7 @@ def make_specplot(fig, ax, powerarr, kin=False):
             else:
                 s = 't = %.0f'
             #s = 't = %.0f'
-            curr_clr = plt.cm.Paired(next(clrindx))
+            curr_clr = cscheme(next(clrindx))
             if not kin:
                 ax.plot(krms[1:], pb[1:], label=s % tb[p], color=curr_clr, linewidth=1.5)
             else:
@@ -243,17 +250,18 @@ def make_specplot(fig, ax, powerarr, kin=False):
     if args.peak:
         fig2, ax2 = newfig(fwidth)
         tax2 = ax2.twinx()
-        setup_tsplot(ax2, xlim=(tb[1], 200))
+        setup_tsplot(ax2, xlim=(tb[1], 300))
+        print(ax2.get_xlim())
         tax2.set_yscale('log')
         if args.verbose: 
             print('tb: %i, len(kmax): %i' % (tb.shape[0], len(kmax)))
         i = 1 if args.ddir.startswith('delta') else 0
         ppo, ppcov = curve_fit(linear, np.log10(tb[i+10:]), np.log10(kmax[10:]))
         ppo1, ppcov1 = curve_fit(linear, np.log10(tb[i+1:]), np.log10(maxx[1:]))
-        lns4 = tax2.plot(tb[1:], powerlaw(tb[1:], 10**(ppo1[0]), ppo1[1], x0=0.), color=(0.65, 0.81, 0.89, 1.00),
+        lns4 = tax2.plot(tb[1:], powerlaw(tb[1:], 10**(ppo1[0]), ppo1[1], x0=0.), color=clr1,
                          label=r'fit: $E(k_{max},t)\sim t^{%.0f}$' % ppo1[1], linewidth=2)
         lns3 = ax2.plot(tb[1:], powerlaw(tb[1:], 10**(ppo[0]), ppo[1], x0=0.), linewidth=2,
-                        label=r'fit: $k_{max}\sim t^{%.1f}$' % ppo[1], color=(0.94, 0.44, 0.28, 1.00))
+                        label=r'fit: $k_{max}\sim t^{%.1f}$' % ppo[1], color=clr2)
         lns1 = ax2.plot(tb[i:], kmax, label=r'$k_{\textrm{max}}$', linewidth=2, color='black')
         lns2 = tax2.plot(tb[i:], maxx, '--', color='black', linewidth=2, label='Spectrum Max value')
         ax2.set_ylabel(r'$k_{\textrm{max}}$')
@@ -267,8 +275,8 @@ def make_specplot(fig, ax, powerarr, kin=False):
         savefig(fig2, path.join(figdir,'%s_peak' % args.ddir) )
 
 def make_tsplot(fig, ax):
-    ax.plot(tser.t, tser.brms**2, label=r'$E_{\textrm{mag}}$', linewidth=1.5, color=(0.65, 0.81, 0.89, 1.00))
-    ax.plot(tser.t, tser.urms**2, label=r'$E_{\textrm{kin}}$', linewidth=1.5, color=(0.93, 0.56, 0.28, 1.00))
+    ax.plot(tser.t, tser.brms**2, label=r'$E_{\textrm{mag}}$', linewidth=1.5, color=clr1)
+    ax.plot(tser.t, tser.urms**2, label=r'$E_{\textrm{kin}}$', linewidth=1.5, color=clr2)
     ti = search_indx(tser.t, 10., eps=.05)
     ti2 = search_indx(tser.t, 200., eps=.05)
     if args.verbose: print('index from which fitting begins: ',ti)
@@ -276,7 +284,7 @@ def make_tsplot(fig, ax):
         po1, pco1 = curve_fit(lambda x, a, b: powerlaw(x, a, b, x0=0), tser.t[ti:], tser.brms[ti:]**2)
         po2, pco2 = curve_fit(lambda x, a, b: powerlaw(x, a, b, x0=0), tser.t[ti:], tser.urms[ti:]**2)
         ax.plot(tser.t[ti:ti2], powerlaw(tser.t[ti:ti2],1.5*po1[0],po1[1]), linewidth=1.5, 
-                label=r'fit: $B\sim t^{%.1f}$' % po1[1], color=(0.72, 0.61, 0.46, 1.00))
+                label=r'fit: $B\sim t^{%.1f}$' % po1[1], color=clr3)
         if args.verbose:
             print('Magnetic Energy: E={0:.1e}*t^{1:.1f}'.format(*po1))
             print('Kinetic Energy: E={0:.1e}*t^{1:.1f}'.format(*po2))
@@ -291,7 +299,8 @@ def setup_tsplot(ax, xlim=None):
     ax.set_xlim(xlim)
 
 def read_zeus_data(ddir):
-    files = [s for s in listdir(ddir) if s.startswith('magspec_')]
+    files = sorted([s for s in listdir(ddir) if s.startswith('magspec_')], 
+            key=lambda s: int(s.split('_')[1][:-4]))
     if args.verbose:
         print(files, type(files))
     tb = np.zeros(len(files))
@@ -299,8 +308,9 @@ def read_zeus_data(ddir):
     for f, fi in enumerate(files):
         with open(join(ddir, fi)) as infile:
                 tb[f] = int(float(infile.readline())) 
-                print('hello', tb[f])
+                print('read spec at: t=', tb[f])
                 powerb[f,:] = [float(x) for x in infile.readlines()]
+    return tb, powerb
 
 pgf_with_latex = {                      # setup matplotlib to use latex for output
     "pgf.texsystem": "pdflatex",        # change this if using xetex or lautex
@@ -324,6 +334,17 @@ mpl.rcParams.update(pgf_with_latex)
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+
+if args.light:
+    cscheme = plt.cm.Paired
+    clr1 = (0.65, 0.81, 0.89, 1.00)
+    clr2 = (0.93, 0.56, 0.28, 1.00)
+    clr3 = (0.72, 0.61, 0.46, 1.00)
+else:
+    cscheme = plt.cm.Dark2
+    clr1 = (0.11, 0.62, 0.47, 1.00)
+    clr2 = (0.61, 0.35, 0.65, 1.00)
+    clr3 = (0.40, 0.40, 0.40, 1.00)
 
 # build a rectangle in axes coords
 left, width = .25, .5

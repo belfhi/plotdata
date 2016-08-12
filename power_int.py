@@ -13,7 +13,7 @@ parser.add_argument('-v', '--verbose', action='store_true', default=False, help=
 parser.add_argument('-hel', '--helical', action='store_true', default=False, help='plot the helical line too')
 args = parser.parse_args()
 
-dstart = args.ddir
+dstart = args.ddir.split('_')[0]
 
 def figsize(scale, ratio=None):
     fig_width_pt = 523.5307                         # Get this from LaTeX using \the\textwidth
@@ -104,22 +104,23 @@ if args.verbose:
     print(dirs)
 clrindx = iter(np.linspace(0,1,len(dirs)))
 
-dim = pc.read_dim(datadir='prandtl_1e0')
-krms = np.loadtxt('prandtl_1e0/power_krms.dat').flatten()[:dim.nxgrid//2]
-par2 = pc.read_param(param2=True, quiet=True, datadir=dirs[0])
-#print(krms.shape)
-
-
 # Simple plot
 fig, ax  = newfig(0.45, ratio=0.75)
 
+if args.helical:
+    par2 = pc.read_param(param2=True, quiet=True, datadir='helical')
+    #print(krms.shape)
+    tstop = 10*par2.tforce_stop
+    if args.verbose: 
+        print('tstop: ',tstop)
+elif dstart.startswith('delta'):
+    tstop = 1.
+else:
+    tstop=0
+
 for dd in dirs:   
-    try:
-        tstop = 10*par2.tforce_stop
-    except AttributeError:
-        tstop = 0.1
-    if dstart.startswith('delta'):
-        tstop = 1.
+    dim = pc.read_dim(datadir=dd)
+    krms = np.loadtxt(join(dd,'power_krms.dat')).flatten()[:dim.nxgrid//2]
     if args.verbose:
         print('dir: ', dd)
     try:
@@ -145,7 +146,7 @@ for dd in dirs:
     #ll = r'$\nu=%s$' % to_times(dd.split('_')[-1]))
     if args.verbose:
         print(t.shape, emax1.shape)
-    clr = plt.cm.Paired(next(clrindx))
+    clr = plt.cm.Dark2(next(clrindx))
     if args.verbose:
         print('clr: %.1f, %.1f, %.1f, %.1f' % clr)
     ax.plot(t[tvals:], emax1, label=nu_string(dd), color=clr, linewidth=1.5)
@@ -172,5 +173,5 @@ else:
     filename = dstart + '_energy_increase'
 if args.verbose:
     print(filename)
-savefig(filename)
+savefig(join('figures',filename))
 print('SUCCESS')

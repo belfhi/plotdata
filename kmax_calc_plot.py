@@ -11,6 +11,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('ddir', default='', type=str, help='datadir directory')
 #parser.add_argument('-s', '--spectra',  action='store_true', default=False, help="plot magnetic spectra")
 parser.add_argument('-v', '--verbose', action='store_true', default=False, help='add verbosity')
+parser.add_argument('-l', '--light', action='store_true', default=False, help='use light color scheme')
 args = parser.parse_args()
 
 def figsize(scale, ratio=None):
@@ -93,6 +94,10 @@ krms = np.loadtxt(join(args.ddir, 'power_krms.dat')).flatten()[:dim.nxgrid//2]
 if args.verbose:
     print('krms shape: ',krms.shape)
 
+if args.light:
+    cscheme = plt.cm.Paired
+else:
+    cscheme = plt.cm.Dark2
 
 # Simple plot
 fig, ax  = newfig(0.45, ratio=0.75)
@@ -106,8 +111,8 @@ for dd in dirs:
     dim = pc.read_dim(datadir=dd)
     xi = 256
     try:
-        t = np.loadtxt(join(dd, 'tb_res.dat'))
-        powerb = np.loadtxt(join(dd, 'powerb_res.dat'))
+        t = np.loadtxt(join(dd, 'ttot.dat'))
+        powerb = np.loadtxt(join(dd, 'powertot.dat'))
     except FileNotFoundError:
         t, powerb = pc.read_power('power_mag.dat', datadir=dd)
     if args.verbose: 
@@ -132,7 +137,7 @@ for dd in dirs:
         s = r'$\nu%s = %s$' % (hyp3, to_times(dd.split('_')[-1]))
     else:
         s = r'Pr $=%i$' % float(dd.split('_')[-1])
-    ax.plot(t[1:], kmax[1:], label=s  , linewidth=1.5, color=plt.cm.Paired(next(clrindx)))
+    ax.plot(t[1:], kmax[1:], label=s  , linewidth=1.5, color=cscheme(next(clrindx)))
     first_dir = False
 ax.set_yscale('log')
 ax.set_xlim(.1,100)
@@ -150,5 +155,5 @@ ax.set_ylabel(r'$L_{\textrm{int}}$')
 fig.tight_layout(pad=0.3)
 filename = dstart +'_scale_evolution'
 if args.verbose: print(filename)
-savefig(filename)
+savefig(join('figures',filename))
 print('SUCCESS')
