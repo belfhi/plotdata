@@ -65,7 +65,7 @@ def savefig(filename):
 
 def to_times(s):
     s1, s2 = s.split('e')
-    return r'{0}\times 10^{{{1}}}'.format(s1, s2)
+    return r'{0}{{\times}} 10^{{{1}}}'.format(s1, s2)
 
 def linear(x, a, b):
     return a*x + b

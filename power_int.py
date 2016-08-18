@@ -107,18 +107,16 @@ clrindx = iter(np.linspace(0,1,len(dirs)))
 # Simple plot
 fig, ax  = newfig(0.45, ratio=0.75)
 
-if args.helical:
-    par2 = pc.read_param(param2=True, quiet=True, datadir='helical')
-    #print(krms.shape)
-    tstop = 10*par2.tforce_stop
-    if args.verbose: 
-        print('tstop: ',tstop)
-elif dstart.startswith('delta'):
-    tstop = 1.
-else:
-    tstop=0
 
 for dd in dirs:   
+    par2 = pc.read_param(param2=True, quiet=True, datadir=dd)
+    try:    
+        tstop = 5*par2.tforce_stop
+    except AttributeError:
+        if dstart.startswith('delta'):
+            tstop = 1.
+        else:
+            tstop=0
     dim = pc.read_dim(datadir=dd)
     krms = np.loadtxt(join(dd,'power_krms.dat')).flatten()[:dim.nxgrid//2]
     if args.verbose:
@@ -130,13 +128,16 @@ for dd in dirs:
             print('reading concatenated data files')
     except FileNotFoundError:
         t, powerb = pc.read_power('power_mag.dat', datadir=dd)
-    if args.verbose:
-        print('%.1f %.1f %.1f' %(t[0], t[1], t[-1]))
+    tsind = search_indx(t, tstop)
+    if args.verbose: 
+        print('tstop: %.1f, index = %i' % (tstop, tsind))
+    #if args.verbose:
+    #    print('%.1f %.1f %.1f' %(t[0], t[1], t[-1]))
     kmax = 7 # arbitrary value
     dim = pc.read_dim(datadir=dd)
     emax = []
     for p,pb in enumerate(powerb):
-        if t[p] < tstop:
+        if round(t[p],1) < tstop:
             continue
         a = simps(pb[1:kmax], krms[1:kmax])
         emax.append(a)
@@ -158,7 +159,7 @@ if not args.helical:
     ax.set_ylim(1e-1, 1e2)
 #ax.set_yticks([10,20,50,100])
 #ax.set_yticklabels(['$10$','$20$','$50$','$100$'])
-if not args.verbose:
+if not args.helical:
     ax.legend(loc='lower left', ncol=2, frameon=False)
 else:
     ax.legend(loc='upper left', ncol=1, fancybox=True, framealpha=0.5)
@@ -167,8 +168,8 @@ else:
 ax.set_xlabel('time')
 ax.set_ylabel(r'$E(k\leq k_7,t)$')
 fig.tight_layout(pad=0.3)
-if dstart[-1] == '_':
-    filename = dstart +'energy_increase'
+if args.helical:
+    filename = dstart + '_energy_increase_hel'
 else:
     filename = dstart + '_energy_increase'
 if args.verbose:
