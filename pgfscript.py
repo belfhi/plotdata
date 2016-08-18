@@ -6,7 +6,6 @@ from helperfuncs import *
 import matplotlib as mpl
 mpl.use('pgf')
 import sys
-from os import listdir, path
 from mpl_toolkits.axes_grid1 import Grid
 import argparse
 from os import mkdir, path, listdir
@@ -131,7 +130,8 @@ def setup_specax(ax):
         ax.set_ylabel(r'$E_B(k,t)$')
     
     #ylims = (round_exp(powerk[i+1,1]), round_exp( 1.5*powerk[i,:].max()))
-    ylims = (round_exp(powerb[i+1,1]), round_exp( 1.5*powerb[i,:].max()))
+    #ylims = (round_exp(powerb[i+1,1]), round_exp( 1.5*powerb[i,:].max()))
+    ylims = (1e-10, 1e-3)
     ax.set_ylim(ylims)
     if args.verbose:
         print('ylim : %.1e %.1e ' % (ax.get_ylim()))
@@ -150,6 +150,8 @@ def get_plottimes(tb):
         pptimes = [0,1,10,100]
     elif args.gridplot and args.ddir.startswith('nonhel'):
         pptimes = [0,1,10,100]
+    elif args.ddir.startswith('helical'):
+        pptimes = [1,5,20,100]
     else:
         #pptimes = [1,10,50,300]
         pptimes = [0,1,10,100]
@@ -370,7 +372,10 @@ if args.tsplot:
         width, height = bbox.width, bbox.height
         print('ts figure width: %.1f, height: %.1f' % (width, height))
     tser = pc.read_ts(datadir=args.ddir, quiet=not args.verbose)
-    setup_tsplot(ax)
+    if args.ddir == 'helical':
+        setup_tsplot(ax, xlim=(.1, 100))
+    else:
+        setup_tsplot(ax)
     make_tsplot(fig, ax)
  
 if args.spectra:

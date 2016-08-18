@@ -8,10 +8,13 @@ import argparse
 mpl.use('pgf')
 
 parser = argparse.ArgumentParser()
-parser.add_argument('ddir', default='', type=str, help='datadir directory')
+#parser.add_argument('ddir', default='', type=str, help='datadir directory')
+parser.add_argument('ddir', choices=['visc', 'nonhel', 'prandtl', 'delta', 'slope'],
+                    type=str, help='directory from which data is read')
 #parser.add_argument('-s', '--spectra',  action='store_true', default=False, help="plot magnetic spectra")
 parser.add_argument('-v', '--verbose', action='store_true', default=False, help='add verbosity')
 parser.add_argument('-l', '--light', action='store_true', default=False, help='use light color scheme')
+parser.add_argument('-hel', '--helical', action='store_true', default=False, help='add a data point for helicity run')
 args = parser.parse_args()
 
 def figsize(scale, ratio=None):
@@ -84,13 +87,15 @@ dirs = [d for d in listdir('.') if d.startswith(args.ddir[:4]) and isdir(d) and 
 dirs = sorted(dirs, key=lambda a: float(a.split('_')[-1]), reverse=True)
 #dirs =sorted( [s for s in listdir('.') if (isdir(s) and s.startswith(dstart) and not isfile(join(s,'.noscale')))],
              #key=lambda s: float(s.split('_')[-1]))
-dstart=dirs[0].split('_')[0]
+if args.helical:
+    dirs.append('helical')
+dstart=dirs[0]
 if args.verbose:
     print(dirs)
 clrindx = iter(np.linspace(0,1,len(dirs)))
 
-dim = pc.read_dim(datadir=args.ddir)
-krms = np.loadtxt(join(args.ddir, 'power_krms.dat')).flatten()[:dim.nxgrid//2]
+dim = pc.read_dim(datadir=dstart)
+krms = np.loadtxt(join(dstart, 'power_krms.dat')).flatten()[:dim.nxgrid//2]
 if args.verbose:
     print('krms shape: ',krms.shape)
 
@@ -109,7 +114,7 @@ for dd in dirs:
         print('dir: ', dd)
     kmax = []
     dim = pc.read_dim(datadir=dd)
-    xi = 256
+    xi = 150 #dim.nxgrid//2
     try:
         t = np.loadtxt(join(dd, 'ttot.dat'))
         powerb = np.loadtxt(join(dd, 'powertot.dat'))
@@ -135,13 +140,16 @@ for dd in dirs:
         else:
             hyp3 = ' '
         s = r'$\nu%s = %s$' % (hyp3, to_times(dd.split('_')[-1]))
+    elif dd.startswith('helical'):
+        s = 'helical'
     else:
         s = r'Pr $=%i$' % float(dd.split('_')[-1])
-    ax.plot(t[1:], kmax[1:], label=s  , linewidth=1.5, color=cscheme(next(clrindx)))
+    i = 1 if not dd == 'helical' else 5
+    ax.plot(t[i:], kmax[i:], label=s  , linewidth=1.5, color=cscheme(next(clrindx)))
     first_dir = False
 ax.set_yscale('log')
 ax.set_xlim(.1,100)
-if dstart.startswith('visc_'):
+if args.ddir == 'visc':
     ax.set_ylim(1e-2, 2e-1)
 else:
     ax.set_ylim(1e-2, 1e-1)
@@ -153,7 +161,9 @@ ax.legend(loc='upper left', ncol=1, frameon=False)
 ax.set_xlabel('time')
 ax.set_ylabel(r'$L_{\textrm{int}}$')
 fig.tight_layout(pad=0.3)
-filename = dstart +'_scale_evolution'
+filename = args.ddir +'_scale_evolution'
+if args.helical:
+    filename += '_hel'
 if args.verbose: print(filename)
 savefig(join('figures',filename))
 print('SUCCESS')
