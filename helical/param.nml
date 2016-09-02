@@ -16,7 +16,7 @@
  ZETA_GRID0      =  0.0000000E+00,
  GRID_FUNC       = 3*'linear                   ',
  XYZ_STAR        = 3*0.0000000E+00  ,
- LWRITE_IC       = T,
+ LWRITE_IC       = F,
  LNOWRITE        = F,
  LUNIFORM_Z_MESH_ASPECT_RATIO    = F,
  UNIT_SYSTEM     = 'cgs',
@@ -307,7 +307,7 @@
  LSCALE_TO_CS2TOP        = F,
  DENSITY_ZAVER_RANGE     =  -3.141593    ,   3.141593    ,
  LCONSERVE_TOTAL_MASS    = F,
- TOTAL_MASS      =   248.0501    ,
+ TOTAL_MASS      =   248.0503    ,
  IREFERENCE_STATE        = 'nothing                  '
  /
  &MAGNETIC_INIT_PARS
