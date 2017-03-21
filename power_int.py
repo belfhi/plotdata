@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # coding: utf-8
 
 import numpy as np
@@ -72,6 +73,8 @@ def nu_string(dd):
         return r'$k_{max}=%s$' % ds[1][1:]
     elif dd == 'helical':
         return 'helical'
+    elif 'prandtl' in ds:
+        return r'Pr $={%d}$' % float(ds[-1])
     else:
         return r'$\nu=%s$' % to_times(ds[-1])
 
@@ -99,7 +102,7 @@ if len(dirs) > 1:
     except ValueError:
         dirs = sorted(dirs)
 if args.helical:
-    dirs.append('helical')
+    dirs.insert(0, 'helical')
 if args.verbose:
     print(dirs)
 clrindx = iter(np.linspace(0,1,len(dirs)))
@@ -109,14 +112,10 @@ fig, ax  = newfig(0.45, ratio=0.75)
 
 
 for dd in dirs:   
-    par2 = pc.read_param(param2=True, quiet=True, datadir=dd)
-    try:    
-        tstop = 5*par2.tforce_stop
-    except AttributeError:
-        if dstart.startswith('delta'):
-            tstop = 1.
-        else:
-            tstop=0
+    if dstart.startswith('delta'):
+        tstop = 1.
+    else:
+        tstop=0
     dim = pc.read_dim(datadir=dd)
     krms = np.loadtxt(join(dd,'power_krms.dat')).flatten()[:dim.nxgrid//2]
     if args.verbose:
@@ -137,12 +136,13 @@ for dd in dirs:
     dim = pc.read_dim(datadir=dd)
     emax = []
     for p,pb in enumerate(powerb):
-        if round(t[p],1) < tstop:
-            continue
+        #if round(t[p],1) < tstop:
+        #    continue
         a = simps(pb[1:kmax], krms[1:kmax])
         emax.append(a)
     emax1 = emax/emax[0]
-    tvals = len(t)-len(emax1)
+    #tvals = len(t)-len(emax1)
+    t = t[len(t)-len(emax1):]
     #ll = '$k^{%g}$' % float(dd[1:]))
     #ll = r'$\nu=%s$' % to_times(dd.split('_')[-1]))
     if args.verbose:
@@ -150,7 +150,8 @@ for dd in dirs:
     clr = plt.cm.Dark2(next(clrindx))
     if args.verbose:
         print('clr: %.1f, %.1f, %.1f, %.1f' % clr)
-    ax.plot(t[tvals:], emax1, label=nu_string(dd), color=clr, linewidth=1.5)
+    #ax.plot(t[tvals:], emax1, label=nu_string(dd), color=clr, linewidth=1.5)
+    ax.plot(t[1:], emax1[1:], label=nu_string(dd), color=clr, linewidth=1.5)
 
 ax.set_xscale('log')
 ax.set_yscale('log')
@@ -166,7 +167,7 @@ else:
 #fig.suptitle('Wavenumber of Maximum ')
 
 ax.set_xlabel('time')
-ax.set_ylabel(r'$E(k\leq k_7,t)$')
+ax.set_ylabel(r'$E_{k\leq k_7}/E_0$')
 fig.tight_layout(pad=0.3)
 if args.helical:
     filename = dstart + '_energy_increase_hel'

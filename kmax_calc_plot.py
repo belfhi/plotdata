@@ -9,7 +9,7 @@ mpl.use('pgf')
 
 parser = argparse.ArgumentParser()
 #parser.add_argument('ddir', default='', type=str, help='datadir directory')
-parser.add_argument('ddir', choices=['visc', 'nonhel', 'prandtl', 'delta', 'slope'],
+parser.add_argument('ddir', choices=['visc', 'nonhel', 'prandtl', 'delta', 'slope', 'data'],
                     type=str, help='directory from which data is read')
 #parser.add_argument('-s', '--spectra',  action='store_true', default=False, help="plot magnetic spectra")
 parser.add_argument('-v', '--verbose', action='store_true', default=False, help='add verbosity')
@@ -84,7 +84,13 @@ from scipy.optimize import curve_fit
 
 
 dirs = [d for d in listdir('.') if d.startswith(args.ddir[:4]) and isdir(d) and not isfile(join(d,'NOPLOT'))]
-dirs = sorted(dirs, key=lambda a: float(a.split('_')[-1]), reverse=True)
+if len(dirs) == 0:
+    print('no datadir found. check parameters.')
+    parser.print_()
+try:
+    dirs = sorted(dirs, key=lambda a: float(a.split('_')[-1]), reverse=True)
+except ValueError:
+    pass
 #dirs =sorted( [s for s in listdir('.') if (isdir(s) and s.startswith(dstart) and not isfile(join(s,'.noscale')))],
              #key=lambda s: float(s.split('_')[-1]))
 if args.helical:
@@ -114,20 +120,21 @@ for dd in dirs:
         print('dir: ', dd)
     kmax = []
     dim = pc.read_dim(datadir=dd)
-    xi = 150 #dim.nxgrid//2
+    xi = dim.nxgrid//2
     try:
         t = np.loadtxt(join(dd, 'ttot.dat'))
         powerb = np.loadtxt(join(dd, 'powertot.dat'))
+        if args.verbose: print('using custom powertot.dat file')
     except FileNotFoundError:
         t, powerb = pc.read_power('power_mag.dat', datadir=dd)
     if args.verbose: 
-        print(t.shape, powerb.shape)
+        print(t.shape, powerb.shape, t[0], t[-1])
     for p,pb in enumerate(powerb):
         xi = np.where( pb == pb[:xi+1].max())[0][0]; xi1 = xi - xi//3; xi2 = xi + xi//2
         try:
             po, pco = curve_fit(parabola, np.log10(krms[xi1:xi2]), np.log10(pb[xi1:xi2]), p0=p0)
             if p == 0 and args.verbose and first_dir:
-                print(po)
+                print('fit pars: ',po)
         except RuntimeError:
             print(xi, xi1, xi2)
         p0 = po
@@ -144,8 +151,7 @@ for dd in dirs:
         s = 'helical'
     else:
         s = r'Pr $=%i$' % float(dd.split('_')[-1])
-    i = 1 if not dd == 'helical' else 5
-    ax.plot(t[i:], kmax[i:], label=s  , linewidth=1.5, color=cscheme(next(clrindx)))
+    ax.plot(t[1:], kmax[1:], label=s  , linewidth=1.5, color=cscheme(next(clrindx)))
     first_dir = False
 ax.set_yscale('log')
 ax.set_xlim(.1,100)
