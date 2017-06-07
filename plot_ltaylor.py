@@ -1,4 +1,6 @@
-#!/usr/env python3
+#!/usr/bin/env python3
+# coding: utf-8
+
 import numpy as np
 import pencil as pc
 from scipy.optimize import curve_fit
@@ -79,7 +81,7 @@ def make_tsplot(fig, ax):
 def setup_tsplot(ax):
     ax.set_yscale('log')
     ax.set_xscale('log')
-    ax.set_xlabel('time')
+    ax.set_xlabel('time $t$')
     ax.set_ylabel(r'$L_{\textrm{T}}$')
 
 pgf_with_latex = {                      # setup matplotlib to use latex for output

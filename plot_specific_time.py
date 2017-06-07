@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+# coding: utf-8
 
 import numpy as np
 import pencil as pc
@@ -5,6 +7,7 @@ from scipy.optimize import curve_fit
 from scipy.integrate import romb, simps
 from helperfuncs import *
 import matplotlib as mpl
+from matplotlib.ticker import MultipleLocator, FormatStrFormatter, NullFormatter
 mpl.use('pgf')
 import sys
 import argparse
@@ -12,12 +15,13 @@ from os import mkdir, path, listdir
 from os.path import join, isdir, isfile
 
 parser = argparse.ArgumentParser()
-parser.add_argument('ddir', choices=['visc', 'nonhel', 'prandtl', 'delta', 'slope'],
-                    type=str, help='directory from which data is read')
+parser.add_argument('ddir', choices=['visc1024','visc', 'nonhel', 'prandtl', 'prandtl1024', 'delta', 'slope'],
+                type=str, help='directory from which data is read')
 parser.add_argument('-v', '--verbose', action='store_true', default=False, help='add verbosity')
-parser.add_argument('-t', '--tplot', action='store', default=10, type=int, help='specify plotting time')
+parser.add_argument('-t', '--tplot', action='store', default=10., type=float, help='specify plotting time')
 parser.add_argument('-e', '--energy', action='store_true', default=False, help='do energy plot, not length scale plot')
 parser.add_argument('-hel', '--helical', action='store_true', default=False, help='add a data point for helicity run')
+parser.add_argument('-twin', action='store_true', default=False, help='add twin axes')
 
 args = parser.parse_args()
 figdir = 'figures'
@@ -25,10 +29,16 @@ figdir = 'figures'
 fhyper = True
 fnu = True
 
-if args.energy:
+if args.twin:
+    fnameadd = 'twin'
+elif args.energy:
     fnameadd = 'energy'
 else:
     fnameadd = 'lint'
+
+if args.verbose:
+    for arg in vars(args):
+        print('{:<9s}: {:<12s}'.format(arg, str(getattr(args, arg))))
 
 def sortdirs(dd, flt=True):
     if not args.ddir == 'nonhel':
@@ -54,7 +64,7 @@ def figsize(scale, ratio=None):
 
 # I make my own newfig and savefig functions
 def newfig(width):
-#    plt.clf()
+    #    plt.clf()
     fig = plt.figure(figsize=figsize(width, ratio=0.75))
     ax = fig.add_subplot(111)
     return fig, ax
@@ -67,28 +77,37 @@ def to_times(s):
     s1, s2 = s.split('e')
     return r'{0}{{\times}} 10^{{{1}}}'.format(s1, s2)
 
-def get_labels(dd):
-    if args.ddir == 'visc':
-        global fhyper
-        global fnu
-        if any( x in dd.split('_') for x in ['hyper', 'helical']):
+def get_labels(hyper3=False, energy=False):
+    if args.twin:
+        if energy:
+            ll = r'$E_{k\leq 7}/E_0$'
             clr = (0.65, 0.81, 0.89, 1.00)
-            if fhyper:
-                ll = r'$\nu_{hyper3}$'
-            else:
-                ll =''
-            fhyper = False
         else:
+            ll = r'$L_I$'
             clr = (0.93, 0.56, 0.28, 1.00)
-            if fnu:
-                ll = r'$\nu_{const}$'
-            else:
-                ll = ''
-            fnu = False
+    elif 'visc' in args.ddir:
+        if hyper3:
+            ll = r'$\nu_\textrm{hyper3}$'
+            clr = (0.65, 0.81, 0.89, 1.00)
+        else:
+            ll = r'$\nu_\textrm{standard}$'
+            clr = (0.93, 0.56, 0.28, 1.00)
     else:
         ll = ''
         clr = (0.93, 0.56, 0.28, 1.00)
     return ll, clr
+
+def get_txtloc():
+    if 'visc' in args.ddir and not args.energy:
+        return (0.8,0.05)
+    elif 'visc' in args.ddir and args.energy:
+        return (0.05, 0.05)
+    elif args.twin and 'visc' in args.ddir:
+        return (0.05, 0.9)
+    elif 'prandtl' in args.ddir:
+        return (0.05, 0.05)
+    else:
+        return (0.8,0.9)
 
 dirs = sorted([l for l in listdir('.') if l.startswith(args.ddir) and isdir(l) and not isfile(join(l,'NOPLOT'))], key=sortdirs)
 if args.helical:
@@ -121,41 +140,94 @@ import matplotlib.pyplot as plt
 fwidth = 0.45
 fig, ax = newfig(fwidth)
 
+
+# calculate the timescales
+tser = pc.read_ts(datadir=dirs[-1])
+par2 = pc.read_param(quiet=True, datadir=dirs[-1], param2=True)
+pars = pc.read_param(quiet=True, datadir=dirs[-1])
+vA0 = tser.brms[0]
+k0 = pars.kpeak_aa
+tau0 = (vA0*k0)**-1
+print('tau_0 = ',tau0)
+
+if args.twin:
+    twinax = ax.twinx()
+    twinax.set_yscale('log')
+    yl2 = twinax.get_ylim()
+    if args.verbose:
+        print(yl2)
+    #twinax.set_ylim(1,1e4)
+    twinax.set_ylabel(r'$E_{k\leq 7}/E_0$')
+
 first_dir = True
 
+# lists to store the data
+Ek7  = []
+kmax = []
+#special lists for visc different colors:
+ehyper = []
+
 for i,dd in enumerate(dirs):
-    p0 = (-12.92758524, 1.94666781, 3.4643292)  #(-15.56, 2.20, 4.26)
     if args.verbose: 
         print('current dir: ', dd)
+
+    # starting value for fitting process
+    p0 = (-12.92, 1.94, 3.46)  #(-15.56, 2.20, 4.26)
+    
+    # read in parameter and krms file
     dim = pc.read_dim(datadir=dd)
     krms = np.loadtxt(join(dd, 'power_krms.dat')).flatten()[:dim.nxgrid//2]
     xi = dim.nxgrid//2
+    par2 = pc.read_param(quiet=True, datadir=dd, param2=True)
+    
+    # reading the spectrum data
     try:
         tb, powerb = (np.loadtxt(join(dd, 'ttot.dat')), np.loadtxt(join(dd, 'powertot.dat')))
     except FileNotFoundError:
         tb, powerb = pc.read_power('power_mag.dat', datadir=dd) 
     if args.verbose: 
         print('n_spec = %g; k_Ny = %g' % powerb.shape)
+    
+    # look for plotting index
     indx = search_indx(tb, args.tplot)
-    if args.verbose: print('selected plotting index: ',indx)
-    kmax = []
-    if dd == 'helical':
-        tstop = 0.5
+    if indx is None:
+        print('No plotting time found, choose another!')
+        sys.exit(1)
+    if args.verbose: 
+        print('selected plotting index: ',indx)
+    
+    # dont do analysis for first helical spectra 
+    # should be removed, when proper restart data is there
+    if 'delta' in dd.split('_'):
+        tstop = 1.0
     else:
         tstop = 0
-    if args.verbose: print('t_stop = ', tstop)
+    if args.verbose: 
+        print('t_stop = ', tstop)
+    
+    # start loop over data
+    first = True
     for p,pb in enumerate(powerb):
-        if args.energy:
+        if args.energy or args.twin:
+            km = 7
             if round(tb[p],1) >= tstop:
-                km = 7
-                kmax.append(simps(pb[1:km], krms[1:km]))
-            else:
-                continue
-        else:
+                if first:
+                    E0 = simps(pb[1:km], krms[1:km])
+                    first = False
+                    if args.verbose: print('first energy: ', E0)
+    
+                elif p == indx:
+                    etemp = simps(pb[1:km], krms[1:km])/E0
+                    if 'visc' in args.ddir and any( x in dd.split('_') for x in ['helical', 'hyper']):
+                        ehyper.append(etemp)
+                    else:
+                        Ek7.append(etemp)
+    
+        if not args.energy or args.twin:
             if round(tb[p],1) >= tstop:
                 xi = np.where( pb == pb[:xi+1].max())[0][0]; xi1 = xi - xi//3; xi2 = xi + xi//2
                 try:
-                    po, pco = curve_fit(parabola, np.log10(krms[xi1:xi2]), np.log10(pb[xi1:xi2]), p0=p0)
+                    po, pco = curve_fit(parabola, np.log10(krms[xi1:xi2+1]), np.log10(pb[xi1:xi2+1]), p0=p0)
                     if p == 0 and args.verbose and first_dir:
                         print('fitting parameters:  \n',po)
                 except RuntimeError:
@@ -163,47 +235,89 @@ for i,dd in enumerate(dirs):
                     print(xi, xi1, xi2)
                     sys.exit(1)
                 p0 = po
-                kmax.append(10**po[1])
-            else:
-                continue
-    if args.energy:
-        kplot = kmax[indx]/kmax[0]
-    else:
-        kplot = 1/(kmax[indx]/kmax[0])
-    if args.verbose:
-        print('len(kmax) = %g; len(tb) = %g; k10 = %.2e'% (len(kmax), *tb.shape, kplot))
-    ll, clr = get_labels(dd)
-    ax.plot(i+1, kplot, 'o', color=clr, markersize=8, label=ll)
-    first_dir = False
+                if p == 0:
+                    km0 = 10**(-po[1])
+                    if args.verbose:
+                        print('L_0 = ',km0)
+                if p == indx:
+                    L_I = 10**(-po[1])
+                    kmax.append(L_I)
+                    if args.verbose:
+                        print(dd, L_I)
+        else:
+            continue
 
-#ax.set_xlim(0, len(dirs)+1)
-ax.set_xlim(0.75, len(dirs)+0.25)
-if args.helical:
-    ax.set_yscale('log')
-    ylim = ax.get_ylim()
+first_dir = False
+print(Ek7, ehyper)
+mkr = 5
+xvals =[i+1 for i in range(len(dirs))]
+if args.verbose:
+    print('xvals: ', xvals, ' len :', len(xvals))
+if args.energy or args.twin:
+    if args.twin:
+        ll, clr = get_labels(energy=True)
+        l1 = twinax.plot(xvals, Ek7, 'o', color=clr, markersize=mkr, label=ll)
+    else:
+        ll, clr = get_labels(hyper3=True)
+        if args.verbose: print(ll)
+        if any('hyper' in dd.split('_') for dd in dirs):
+            if args.helical:
+                x1 = [1,2,3]
+                l1 = ax.plot(x1, ehyper, 'o', color=clr, markersize=mkr, label=ll)
+                ll, clr = get_labels(hyper3=False)
+                x2 = [4,5,6,7]
+                l2 = ax.plot(x2, Ek7, 'o', color=clr, markersize=mkr, label=ll)
+            else:
+                x1 = [1,2]
+                l1 = ax.plot(x1, ehyper , 'o', color=clr, markersize=mkr, label=ll)
+                ll, clr = get_labels(hyper3=False)
+                x2 = [3,4,5,6]
+                l2 = ax.plot(x2, Ek7, 'o', color=clr, markersize=mkr, label=ll)
+        else:
+            l1 = ax.plot(xvals, Ek7, 'o', color=clr, markersize=mkr, label=ll)
+    print('plotting energy')
+
+if not args.energy or args.twin:
+    ll, clr = get_labels(energy=False)
+    l1 = []
+    l2 = ax.plot(xvals, kmax, 'o', color=clr, markersize=mkr, label=ll)
+    print('plotting length scale')
+
+if args.verbose:
+    print('len(E_k7) = %g; len(tb) = %g '% (len(Ek7), *tb.shape))
+
+ylim = ax.get_ylim()
+if args.verbose:
+    print(ylim)
+ax.set_yticks([1e-2, 1e-1], minor=True)
+ax.set_yticklabels(['$10^{-2}$', '$10^{-1}$'], minor=True)
+ax.set_xlim(0.9, len(dirs)+0.1)
+#ax.set_xlim(0.9, len(dirs)+0.1)
+#if args.helical:
+ax.set_yscale('log')
+if not args.energy or args.twin:
+    ax.set_ylim(1e-2, 1e-0)
+ax.set_ylim(1e-2, 1e-0)
+ax.yaxis.set_minor_formatter(NullFormatter())
     #print('ylims: {:.1f} {:.1f}'.format( *ax.get_ylim()))
     #ax.set_ylim(0.5*ylim[0], 1.1*ylim[1])
-else:
-    ax.set_ylim(0.9*ylim[0], 1.1*ylim[1])
+#else:
+#    ax.set_ylim(0.9*ylim[0], 1.1*ylim[1])
 if args.verbose:
-    print('ylims: {:.1f} {:.1f}'.format( *ax.get_ylim()))
-ax.set_xticks(range(1,len(dirs)+1))
+    print('ylims: {:.1e} {:.1e}'.format( *ax.get_ylim()))
+ax.set_xticks(xvals)
 
-if args.ddir == 'visc' and not args.energy:
-    txtloc = (0.8,0.05)
-elif args.ddir == 'visc' and args.energy:
-    txtloc = (0.05, 0.05)
+txtloc = get_txtloc()
+ax.text(*txtloc, r'$t=%.0f\ \tau_0$'% (args.tplot/tau0), transform=ax.transAxes, horizontalalignment='left')
+
+if not args.energy:
+    ax.set_ylabel(r'$L_I$')
 else:
-    txtloc = (0.8,0.9)
-
-ax.text(*txtloc, 't=%.0f'% args.tplot, transform=ax.transAxes, horizontalalignment='left')
-
-if args.energy:
     ax.set_ylabel(r'$E_{{k\leq k_{{{0:d}}}}}/E_0$'.format(km))
-else:
-    ax.set_ylabel(r'$L_{\textrm{int}}$')
+#    else:
+#        ax.set_ylabel(r'$L_I$')
 
-if args.ddir == 'prandtl':
+if 'prandtl' in args.ddir :
     #ax.set_xticklabels(['$%s$' % to_times(sortdirs(s, flt=False)) for s in dirs])
     if args.helical:
         xtlabls = ['%.0f' % float(s.split('_')[-1])  for s in dirs[1:]]
@@ -211,27 +325,29 @@ if args.ddir == 'prandtl':
     else:
         xtlabls = ['%.0f' % float(s.split('_')[-1])  for s in dirs]
     ax.set_xlabel('Prandtl number')
-elif args.ddir == 'visc':
+elif 'visc' in args.ddir:
     #ax.set_xticklabels(['$%s$' % to_times(sortdirs(s, flt=False)) for s in dirs], rotation=45)
     if args.helical:
         xtlabls = ['$%s$' % to_times(sortdirs(s, flt=False)) for s in dirs[1:]]
         xtlabls.insert(0, r'$\mathcal{H}$')
     else:
         xtlabls = ['$%s$' % to_times(sortdirs(s, flt=False)) for s in dirs]
-    ax.set_xlabel(r'viscosity parameter $\nu$')
+    ax.set_xlabel(r'viscosity $\nu$')
 else:
     xtlabls =['%.0e' % sortdirs(s) for s in dirs]
-
+print(xtlabls)
 ax.set_xticklabels(xtlabls)
-if args.ddir == 'visc':
-    if not args.energy or args.helical:
-        ax.legend(loc='upper right', numpoints=1)
-    else:
-        ax.legend(loc='lower left', numpoints=1)
+if args.twin or 'visc' in args.ddir :
+    lns = l1 + l2
+    lbls = [ln.get_label() for ln in lns]
+    ax.legend(lns, lbls, loc='upper right', numpoints=1, fancybox=True, framealpha=0.5)
+#else:
+#    ax.legend(loc='lower left', numpoints=1)
+
 if args.helical:
-    fname = '%s_t%.0f_%s_comparison_hel' % (args.ddir, args.tplot,fnameadd )
+    fname = '%s_t%g_%s_comparison_hel' % (args.ddir, args.tplot,fnameadd )
 else:
-    fname = '%s_t%.0f_%s_comparison' % (args.ddir, args.tplot,fnameadd )
+    fname = '%s_t%g_%s_comparison' % (args.ddir, args.tplot,fnameadd )
 fname = join(figdir, fname)
 if args.verbose:
     print(fname)

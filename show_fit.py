@@ -1,10 +1,14 @@
+#!/usr/bin/env python3
 # coding: utf-8
 
 import numpy as np
 import matplotlib as mpl
 import sys
 from os import path, listdir
+from matplotlib.ticker import ScalarFormatter
 mpl.use('pgf')
+
+k0 = 80
 
 try:  
     dstart = sys.argv[1]
@@ -81,8 +85,7 @@ import numpy as np
 from helperfuncs import search_indx
 from os import listdir, path
 from scipy.optimize import curve_fit
-
-try:
+try: 
     dim = pc.read_dim(datadir=dstart)
     krms = np.loadtxt(path.join(dstart,'power_krms.dat')).flatten()[:dim.nxgrid//2]
     print('krms shape: ', krms.shape)
@@ -101,13 +104,11 @@ print('plotting at t = %g' % t[tfit])
 # Simple plot setup
 plotted = False
 fig, ax  = newfig(0.45, ratio=0.75)
-ax.set_xscale('log')
+#ax.set_xscale('log')
 ax.set_yscale('log')
 #ax.set_xlim(1,dim.nxgrid//2)
 ax.set_xlim(10,50)
 ax.set_ylim(round_exp(powerb[tfit,10]),1.5*max(powerb[tfit,:]))
-ax.set_xticks([10,20,50])
-ax.set_xticklabels([str(s) for s in ax.get_xticks()])
 #ax.set_ylim(1e-7, 1e-3)
 clr = (0.9, 0.4, 0.4, 1.0)
 for p,pb in enumerate(powerb):
@@ -140,8 +141,16 @@ for p,pb in enumerate(powerb):
 ax.legend(loc='lower center', ncol=1, frameon=False)
 #fig.suptitle('Wavenumber of Maximum ')
 
-ax.set_xlabel('k mode')
-ax.set_ylabel(r'$E_{\textrm{mag}}$')
+ax.set_xlabel('$k$')# mode')
+ax.set_ylabel(r'$E_k$')
+#ax.set_xticklabels([str(s) for s in ax.get_xticks()])
+#ax.set_xticklabels([])#'10', '20', '', '' ,'50'])
+#ticks = ax.get_xticks()
+#print(ticks)
+ax.set_xscale('log')
+#ax.set_xticks([10.,50.])
+ax.get_xaxis().set_major_formatter(ScalarFormatter())
+ax.get_xaxis().set_minor_formatter(ScalarFormatter())
 fig.tight_layout(pad=0.3)
 fname = 'fitting_example_%s' % dstart
 filename = path.join('figures',fname)
