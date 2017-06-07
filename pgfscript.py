@@ -12,23 +12,29 @@ from mpl_toolkits.axes_grid1 import Grid
 import argparse
 from os import mkdir, path, listdir
 from os.path import join, isdir, isfile
+from fractions import Decimal, Fraction
+from scipy.integrate import simps
 
 parser = argparse.ArgumentParser()
 parser.add_argument('ddir', default='', type=str, help='datadir directory')
 parser.add_argument('-s', '--spectra',  action='store_true', default=False, help="plot magnetic spectra")
-parser.add_argument('-t', '--tsplot', action='store_true', default=False, help="plot timeseries too")
-parser.add_argument('-g', '--gridplot', action='store_true', default=False, help='do the gridplot for multiple dirs')
+parser.add_argument('-ts', '--tsplot', action='store_true', default=False, help="plot timeseries too")
+parser.add_argument('-grid', '--gridplot', action='store_true', default=False, help='do the gridplot for multiple dirs')
 parser.add_argument('-v', '--verbose', action='store_true', default=False, help='add verbosity')
 parser.add_argument('-f', '--fit', action='store_true', default=False, help="don't fit a parabola")
 parser.add_argument('-p', '--peak', action='store_true', default=False, help="make a plot of peak evolution")
 parser.add_argument('-n', "--ncol", type=int, default=2, help="amount of columns in legend")
 parser.add_argument('-d', "--demo", action='store_true', default=False, help="demonstrate the fitting method")
-parser.add_argument('-k', "--kinetic", action='store_true', default=False, help="make kinetic spectra")
+parser.add_argument('-kin', "--kinetic", action='store_true', default=False, help="make kinetic spectra")
 parser.add_argument('-l', "--light", action='store_true', default=False, help="Light color scheme")
 
 args = parser.parse_args()
-figdir = 'figures'
-
+if args.ddir.startswith('zeus'):
+    k0 = 30.
+    print(args.ddir)
+else:
+    k0 = 80.
+print(k0)
 # need fit arg for peak:
 if args.peak:
     args.fit = True
@@ -42,7 +48,7 @@ def round_exp(num, prec=0):
     return newnum
 
 def check_dirname_grid(dd):
-    if dd.split('_')[0] in ['visc', 'prandtl', 'slope','nonhel']:
+    if dd.split('_')[0] in ['visc', 'prandtl', 'slope','nonhel','visc1024', 'prandtl1024']:
         return True
     else:
         return False
@@ -61,7 +67,7 @@ if args.gridplot and not check_dirname_grid(args.ddir):
     print('   python pgfscript.py -g slope')
     sys.exit(1)
 elif args.gridplot:
-    dirs = [d for d in listdir('.') if d.startswith(args.ddir[:4]) and isdir(d) and not isfile(join(d,'NOPLOT'))]
+    dirs = [d for d in listdir('.') if d.startswith(args.ddir.split('_')[0]) and isdir(d) and not isfile(join(d,'NOPLOT'))]
     try:
         dirs = sorted(dirs, key=lambda a: float(a.split('_')[-1]))
     except ValueError:
@@ -122,18 +128,16 @@ def setup_specax(ax):
     ax.set_yscale('log')
     ax.set_xscale('log')
     i = 1 if args.ddir.startswith('delta') else 0
-    ax.set_xlim(1,dim.nxgrid//2)
-    ax.set_xlabel('k mode')
+    ax.set_xlim(1/k0,dim.nxgrid//2/k0)
+    ax.set_xlabel('$k/k_0$')# mode')
+    ax.set_ylabel(r'$E_k$')
     if args.kinetic:
-        ax.set_ylabel(r'$E(k,t)$')
-        ax.text(.05,.95, 'solid: magnetic\ndashed: kinectic', transform=ax.transAxes, 
+        ax.text(.05,.95, 'solid: magnetic\ndashed: kinetic', transform=ax.transAxes, 
                 horizontalalignment='left', verticalalignment='top')
-    else:  
-        ax.set_ylabel(r'$E_B(k,t)$')
     
-    #ylims = (round_exp(powerk[i+1,1]), round_exp( 1.5*powerk[i,:].max()))
-    #ylims = (round_exp(powerb[i+1,1]), round_exp( 1.5*powerb[i,:].max()))
     ylims = (1e-10, 1e-3)
+    #ylims = (round_exp(powerb[i+1,1]), round_exp( 1.5*powerb[i,:].max()))
+    #ylims = (2e-10, 8e-5)
     ax.set_ylim(ylims)
     if args.verbose:
         print('ylim : %.1e %.1e ' % (ax.get_ylim()))
@@ -145,15 +149,13 @@ def get_plottimes(tb):
     elif args.ddir.startswith('nonhel') and tb[-1] > 300:
         pptimes = [1,5,50,300]
     elif args.gridplot and args.ddir.startswith('prandtl'):
-        pptimes = [0,1,10,50, 300]
+        pptimes = [0,1,10,50,300]
     elif args.gridplot and args.ddir.startswith('visc'):
-        pptimes = [0,1,10,50, 100]
+        pptimes = [0,1,10, 100]
     elif args.gridplot and args.ddir.startswith('slope'):
         pptimes = [0,1,10,100]
     elif args.gridplot and args.ddir.startswith('nonhel'):
         pptimes = [0,1,10,100]
-    elif args.ddir.startswith('helical'):
-        pptimes = [1,5,20,100]
     else:
         #pptimes = [1,10,50,300]
         pptimes = [0,1,10,100]
@@ -207,8 +209,8 @@ def plot_spectra(ax, ddir):
         if p in plottimes:
             clr = cscheme(next(clrindx))
             if args.verbose: print('clr: %.1f, %.1f, %.1f, %.1f' % clr)
-            ax.loglog(krms, pb, linewidth=1.5, color=clr)
-    ax.set_xlim(1,dim.nxgrid//2)
+            ax.loglog(krms/k0, pb, linewidth=1.5, color=clr)
+    ax.set_xlim(1/k0,dim.nxgrid//2/k0)
     ymax = round_exp(3*powerb[0,:].max())
     #global ymax0
     #if ymax > ymax0:
@@ -231,7 +233,7 @@ def make_specplot(fig, ax, powerarr, kin=False):
                 kmax.append(10**(po[1]))
                 maxx.append(max(pb))
         else:
-            ax.plot(krms[1:], pb[1:], color=cscheme(next(clrindx)), linewidth=1.5)
+            ax.plot(krms[1:]/k0, pb[1:], linewidth=1.5 , color=cscheme(next(clrindx)))
             continue
         #print(xi, xi1, xi2)
         if p in plottimes:
@@ -242,19 +244,23 @@ def make_specplot(fig, ax, powerarr, kin=False):
             #s = 't = %.0f'
             curr_clr = cscheme(next(clrindx))
             if not kin:
-                ax.plot(krms[1:], pb[1:], label=s % tb[p], color=curr_clr, linewidth=1.5)
+                ax.plot(krms[1:]/k0, pb[1:], label=s % tb[p], linewidth=1.5,color=curr_clr)
             else:
-                ax.plot(krms[1:], pb[1:], '--', color=curr_clr, linewidth=1.5)
+                ax.plot(krms[1:]/k0, pb[1:], '--', linewidth=1.5, color=curr_clr)
             if args.verbose: print('t= %.1f, color: %.2f, %.2f, %.2f, %.2f' % (tb[p], *curr_clr))
             if args.demo:
-                ax.plot(krms[xi1], pb[xi1], "o", color='blue', linewidth=1.5)
-                ax.plot(krms[xi2], pb[xi2], "o", color='blue', linewidth=1.5)
-                xvals = np.arange(krms[xi1],krms[xi2],.1)
+                ax.plot(krms[xi1]/k0, pb[xi1], "o", color='blue', linewidth=1.5)
+                ax.plot(krms[xi2]/k0, pb[xi2], "o", color='blue', linewidth=1.5)
+                xvals = np.arange(krms[xi1],krms[xi2],.1)/k0
                 ax.plot(xvals, 10**parabola(np.log10(xvals), *po), color='blue')
     if args.peak:
+        tau0 = ((2*simps(powerarr[0,:], x=krms, dx=np.diff(krms)))**0.5*k0)**-1
+        print(tau0)
         fig2, ax2 = newfig(fwidth)
         tax2 = ax2.twinx()
-        setup_tsplot(ax2, xlim=(tb[1], 300))
+        setup_tsplot(ax2, xlim=(tb[1]/tau0, 300/tau0), )
+        tax2.set_ylim(1e-6,1e-3)
+        ax2.set_ylim(1e0,1e3)
         print(ax2.get_xlim())
         tax2.set_yscale('log')
         if args.verbose: 
@@ -262,44 +268,50 @@ def make_specplot(fig, ax, powerarr, kin=False):
         i = 1 if args.ddir.startswith('delta') else 0
         ppo, ppcov = curve_fit(linear, np.log10(tb[i+10:]), np.log10(kmax[10:]))
         ppo1, ppcov1 = curve_fit(linear, np.log10(tb[i+1:]), np.log10(maxx[1:]))
-        lns4 = tax2.plot(tb[1:], powerlaw(tb[1:], 10**(ppo1[0]), ppo1[1], x0=0.), color=clr1,
+        if args.verbose: 
+            print(ppo, ppo1)
+        lns4 = tax2.plot(tb[1:]/tau0, powerlaw(tb[1:], 10**(ppo1[0]), ppo1[1], x0=0.), color=clr1,
                          label=r'fit: $E(k_{max},t)\sim t^{%.0f}$' % ppo1[1], linewidth=2)
-        lns3 = ax2.plot(tb[1:], powerlaw(tb[1:], 10**(ppo[0]), ppo[1], x0=0.), linewidth=2,
-                        label=r'fit: $k_{max}\sim t^{%.1f}$' % ppo[1], color=clr2)
-        lns1 = ax2.plot(tb[i:], kmax, label=r'$k_{\textrm{max}}$', linewidth=2, color='black')
-        lns2 = tax2.plot(tb[i:], maxx, '--', color='black', linewidth=2, label='Spectrum Max value')
+        lns3 = ax2.plot(tb[1:]/tau0, powerlaw(tb[1:], 10**(ppo[0]), ppo[1], x0=0.), linewidth=2,
+                        label=r'fit: $k_{max}\sim t^{%0.1f}$' % ppo[1], color=clr2)
+        lns1 = ax2.plot(tb[i:]/tau0, kmax, label=r'$k_{\textrm{max}}$', linewidth=2, color='black')
+        lns2 = tax2.plot(tb[i:]/tau0, maxx, '--', color='black', linewidth=2, label='Spectrum Max value')
         ax2.set_ylabel(r'$k_{\textrm{max}}$')
-        #tax2.set_ylabel('max(E(k,t))')
+        tax2.set_ylabel('Peak Amplitude')
         if args.verbose: 
             print(ppo, ppo1)
         lns = lns1 + lns3 + lns2 + lns4
         labs = [l.get_label() for l in lns]
         ax2.legend(lns, labs, loc='lower left', ncol=1, frameon=False)
         fig2.tight_layout(pad=0.3)
-        savefig(fig2, path.join(figdir,'%s_peak' % args.ddir) )
+        fname_peak = path.join(figdir,'%s_peak' % args.ddir)
+        if args.verbose:
+            print(fname_peak)
+        savefig(fig2, fname_peak )
 
 def make_tsplot(fig, ax):
-    ax.plot(tser.t, tser.brms**2, label=r'$E_{\textrm{mag}}$', linewidth=1.5, color=clr1)
-    ax.plot(tser.t, tser.urms**2, label=r'$E_{\textrm{kin}}$', linewidth=1.5, color=clr2)
+    print('last time: ', tser.t[-1]/tau0)
+    ax.plot(tser.t/tau0, 0.5*tser.brms**2, label=r'$E_{\textrm{mag}}$', linewidth=1.5, color=clr1)
+    ax.plot(tser.t/tau0, 0.5*tser.urms**2, label=r'$E_{\textrm{kin}}$', linewidth=1.5, color=clr2)
     ti = search_indx(tser.t, 10., eps=.05)
     ti2 = search_indx(tser.t, 200., eps=.05)
     if args.verbose: print('index from which fitting begins: ',ti)
     if ti is not None:
-        po1, pco1 = curve_fit(lambda x, a, b: powerlaw(x, a, b, x0=0), tser.t[ti:], tser.brms[ti:]**2)
-        po2, pco2 = curve_fit(lambda x, a, b: powerlaw(x, a, b, x0=0), tser.t[ti:], tser.urms[ti:]**2)
-        ax.plot(tser.t[ti:ti2], powerlaw(tser.t[ti:ti2],1.5*po1[0],po1[1]), linewidth=1.5, 
-                label=r'fit: $B\sim t^{%.1f}$' % po1[1], color=clr3)
+        po1, pco1 = curve_fit(lambda x, a, b: powerlaw(x, a, b, x0=0), tser.t[ti:], 0.5*tser.brms[ti:]**2)
+        po2, pco2 = curve_fit(lambda x, a, b: powerlaw(x, a, b, x0=0), tser.t[ti:], 0.5*tser.urms[ti:]**2)
+        ax.plot(tser.t[ti:ti2]/tau0, powerlaw(tser.t[ti:ti2],1.5*po1[0],po1[1]), linewidth=1.5, 
+                label=r'fit: $E_B\sim t^{%.1f}$' % po1[1], color=clr3)
         if args.verbose:
-            print('Magnetic Energy: E={0:.1e}*t^{1:.1f}'.format(*po1))
-            print('Kinetic Energy: E={0:.1e}*t^{1:.1f}'.format(*po2))
+            print('Magnetic Energy: E={0:.1e}*t^{1:.3f}'.format(*po1))
+            print('Kinetic Energy: E={0:.1e}*t^{1:.3f}'.format(*po2))
 
 def setup_tsplot(ax, xlim=None):
     ax.set_yscale('log')
     ax.set_xscale('log')
-    ax.set_xlabel('time')
-    ax.set_ylabel(r'$E_{B},\ E_{K}$')
+    ax.set_xlabel(r'time $t/\tau_0$')
+    ax.set_ylabel(r'$E_\textrm{mag},\ E_\textrm{kin}$')
     if xlim is None:
-        xlim = (1e-2, tser.t[-1])
+        xlim = (1e-2, tser.t[-1]/tau0)
     ax.set_xlim(xlim)
 
 def read_zeus_data(ddir):
@@ -315,6 +327,19 @@ def read_zeus_data(ddir):
                 print('read spec at: t=', tb[f])
                 powerb[f,:] = [float(x) for x in infile.readlines()]
     return tb, powerb
+
+def select_colors():
+    if args.light:
+        cscheme = plt.cm.Paired
+        clr1 = (0.65, 0.81, 0.89, 1.00)
+        clr2 = (0.93, 0.56, 0.28, 1.00)
+        clr3 = (0.72, 0.61, 0.46, 1.00)
+    else:
+        cscheme = plt.cm.Dark2
+        clr1 = (0.11, 0.62, 0.47, 1.00)
+        clr2 = (0.61, 0.35, 0.65, 1.00)
+        clr3 = (0.40, 0.40, 0.40, 1.00)
+    return cscheme, clr1, clr2, clr3
 
 pgf_with_latex = {                      # setup matplotlib to use latex for output
     "pgf.texsystem": "pdflatex",        # change this if using xetex or lautex
@@ -339,16 +364,11 @@ mpl.rcParams.update(pgf_with_latex)
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
-if args.light:
-    cscheme = plt.cm.Paired
-    clr1 = (0.65, 0.81, 0.89, 1.00)
-    clr2 = (0.93, 0.56, 0.28, 1.00)
-    clr3 = (0.72, 0.61, 0.46, 1.00)
-else:
-    cscheme = plt.cm.Dark2
-    clr1 = (0.11, 0.62, 0.47, 1.00)
-    clr2 = (0.61, 0.35, 0.65, 1.00)
-    clr3 = (0.40, 0.40, 0.40, 1.00)
+cscheme, clr1, clr2, clr3 = select_colors()
+
+# check that there is a figure directory
+figdir = 'figures'
+check_figdir(figdir)
 
 # build a rectangle in axes coords
 left, width = .25, .5
@@ -374,6 +394,7 @@ if args.tsplot:
         width, height = bbox.width, bbox.height
         print('ts figure width: %.1f, height: %.1f' % (width, height))
     tser = pc.read_ts(datadir=args.ddir, quiet=not args.verbose)
+    tau0 = (tser.brms[0]*k0)**-1
     if args.ddir == 'helical':
         setup_tsplot(ax, xlim=(.1, 100))
     else:
@@ -406,7 +427,7 @@ elif args.gridplot:
     else:
         rowcols = (len(dirs)//2, 2); r=1.33
         print('warning: guessing row / column combination')
-    fig = plt.figure(figsize=figsize(.95, ratio=r))
+    fig = plt.figure(figsize=figsize(fwidth, ratio=r))
     grid = Grid(fig, rect=[.08,.1,.9,.85], nrows_ncols=rowcols,
                 axes_pad=0., label_mode='L' )
     #setup_gridax(ax)
@@ -419,18 +440,18 @@ elif args.gridplot:
         ax.text(.05, .95, strings[i], horizontalalignment='left',
                 verticalalignment='top',transform=ax.transAxes)
         #ax.text(1.5, y1, strings[i] )
-    fig.text(0.5, 0.01, 'k mode', ha='center')
-    fig.text(0.01, 0.5, r'$E_{\textrm{mag}}$', va='center', rotation='vertical')
+    fig.text(0.55, 0.01, '$k/k_0$', ha='center')
+    fig.text(0.01, 0.5, r'$E_k$', va='center', rotation='vertical')
 
-if not ( args.tsplot or args.spectra or args.gridplot):
+if not ( args.tsplot or args.spectra or args.gridplot or args.peak):
     print('not making a plot, check settings...')
     sys.exit(1)
 
-if not args.gridplot: 
+if not args.gridplot and not args.peak:
     if args.tsplot:
         ax.legend(loc='lower left', ncol=1, frameon=False)
         if args.verbose: print('legend low left')
-    else:
+    elif args.spectra:
         ax.legend(loc='lower center', ncol=args.ncol, frameon=False)
     fig.tight_layout(pad=.3)
 

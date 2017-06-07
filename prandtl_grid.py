@@ -103,7 +103,7 @@ for i,ax in enumerate(grid):
     ax.text(1.5, 1e-4, strings[i] % int(float(dirs[i].split('_')[-1])))
 
 
-fig.text(0.52, 0.01, 'k mode', ha='center')
+fig.text(0.52, 0.01, 'k', ha='center')
 fig.text(0.01, 0.5, r'$E_{mag}$', va='center', rotation='vertical')
 
 savefig('grid_prandtl_spec')

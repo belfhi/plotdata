@@ -5,12 +5,12 @@ import numpy as np
 import matplotlib as mpl
 import sys
 import argparse
+from matplotlib.ticker import NullFormatter
 mpl.use('pgf')
 
 parser = argparse.ArgumentParser()
 #parser.add_argument('ddir', default='', type=str, help='datadir directory')
-parser.add_argument('ddir', choices=['visc', 'nonhel', 'prandtl', 'delta', 'slope', 'data'],
-                    type=str, help='directory from which data is read')
+parser.add_argument('ddir', type=str, help='directory from which data is read')
 #parser.add_argument('-s', '--spectra',  action='store_true', default=False, help="plot magnetic spectra")
 parser.add_argument('-v', '--verbose', action='store_true', default=False, help='add verbosity')
 parser.add_argument('-l', '--light', action='store_true', default=False, help='use light color scheme')
@@ -64,7 +64,7 @@ def savefig(filename):
 
 def to_times(s):
     s1, s2 = s.split('e')
-    return r'{0}\times 10^{{{1}}}'.format(s1, s2)
+    return r'{0}{\times} 10^{{{1}}}'.format(s1, s2)
 
 def linear(x, a, b):
     return a*x + b
@@ -83,7 +83,7 @@ from os.path import isdir, isfile, join
 from scipy.optimize import curve_fit
 
 
-dirs = [d for d in listdir('.') if d.startswith(args.ddir[:4]) and isdir(d) and not isfile(join(d,'NOPLOT'))]
+dirs = [d for d in listdir('.') if d.startswith(args.ddir.split('_')[0]) and isdir(d) and not isfile(join(d,'NOPLOT'))]
 if len(dirs) == 0:
     print('no datadir found. check parameters.')
     parser.print_()
@@ -102,6 +102,11 @@ clrindx = iter(np.linspace(0,1,len(dirs)))
 
 dim = pc.read_dim(datadir=dstart)
 krms = np.loadtxt(join(dstart, 'power_krms.dat')).flatten()[:dim.nxgrid//2]
+tser0 = pc.read_ts(quiet=not args.verbose, datadir=dstart)
+par0 = pc.read_param(datadir=dstart, quiet=True)
+kpeak = par0.kpeak_aa
+tau0 = (tser0.brms[0]*kpeak)**-1
+print('tau = ',tau0)
 if args.verbose:
     print('krms shape: ',krms.shape)
 
@@ -132,7 +137,7 @@ for dd in dirs:
     for p,pb in enumerate(powerb):
         xi = np.where( pb == pb[:xi+1].max())[0][0]; xi1 = xi - xi//3; xi2 = xi + xi//2
         try:
-            po, pco = curve_fit(parabola, np.log10(krms[xi1:xi2]), np.log10(pb[xi1:xi2]), p0=p0)
+            po, pco = curve_fit(parabola, np.log10(krms[xi1:xi2+1]), np.log10(pb[xi1:xi2+1]), p0=p0)
             if p == 0 and args.verbose and first_dir:
                 print('fit pars: ',po)
         except RuntimeError:
@@ -151,21 +156,22 @@ for dd in dirs:
         s = 'helical'
     else:
         s = r'Pr $=%i$' % float(dd.split('_')[-1])
-    ax.plot(t[1:], kmax[1:], label=s  , linewidth=1.5, color=cscheme(next(clrindx)))
+    ax.plot(t[1:]/tau0, kmax[1:], label=s  , linewidth=1.5, color=cscheme(next(clrindx)))
     first_dir = False
 ax.set_yscale('log')
-ax.set_xlim(.1,100)
+ax.set_xlim(.1/tau0,100/tau0)
 if args.ddir == 'visc':
     ax.set_ylim(1e-2, 2e-1)
 else:
     ax.set_ylim(1e-2, 1e-1)
+ax.yaxis.set_minor_formatter(NullFormatter())
 #ax.set_yticks([10,20,50,100])
 #ax.set_yticklabels(['$10$','$20$','$50$','$100$'])
-ax.legend(loc='upper left', ncol=1, frameon=False)
+ax.legend(loc='upper left', ncol=1)#, fancybox=True, framealpha=0.5)
 #fig.suptitle('Wavenumber of Maximum ')
 
-ax.set_xlabel('time')
-ax.set_ylabel(r'$L_{\textrm{int}}$')
+ax.set_xlabel(r'time $t/\tau_0$')
+ax.set_ylabel(r'$L_I$')
 fig.tight_layout(pad=0.3)
 filename = args.ddir +'_scale_evolution'
 if args.helical:

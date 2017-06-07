@@ -81,7 +81,7 @@ def make_tsplot(fig, ax):
 def setup_tsplot(ax):
     ax.set_yscale('log')
     ax.set_xscale('log')
-    ax.set_xlabel('time')
+    ax.set_xlabel('time $t$')
     ax.set_ylabel(r'$L_{\textrm{T}}$')
 
 pgf_with_latex = {                      # setup matplotlib to use latex for output

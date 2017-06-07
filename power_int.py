@@ -15,6 +15,7 @@ parser.add_argument('-hel', '--helical', action='store_true', default=False, hel
 args = parser.parse_args()
 
 dstart = args.ddir.split('_')[0]
+#
 
 def figsize(scale, ratio=None):
     fig_width_pt = 523.5307                         # Get this from LaTeX using \the\textwidth
@@ -67,13 +68,15 @@ def to_times(s):
 
 def nu_string(dd):
     ds = dd.split('_')
+    print('ds = ', ds)
     if 'hyper' in ds:
         return r'$\nu_3=%s$' % to_times(ds[-1])
     elif 'nonhel' in ds:
         return r'$k_{max}=%s$' % ds[1][1:]
     elif dd == 'helical':
         return 'helical'
-    elif 'prandtl' in ds:
+    elif 'prandtl' in ds[0]:
+        print('succ')
         return r'Pr $={%d}$' % float(ds[-1])
     else:
         return r'$\nu=%s$' % to_times(ds[-1])
@@ -94,18 +97,29 @@ from os import listdir, path
 from os.path import isdir, isfile, join
 from scipy.optimize import curve_fit
 
-
 dirs = [s for s in listdir('.') if isdir(s) and s.startswith(dstart) and not isfile(join(s,'NOPLOT'))]
 if len(dirs) > 1:
     try:
         dirs = sorted(dirs, key=lambda s: float(s.split('_')[-1]), reverse=True)
     except ValueError:
         dirs = sorted(dirs)
+elif len(dirs) == 0:
+    print('choose proper datadir')
+    sys.exit(1)
 if args.helical:
-    dirs.insert(0, 'helical')
+    #dirs.insert(0, 'helical')
+    dirs.append( 'helical')
 if args.verbose:
     print(dirs)
 clrindx = iter(np.linspace(0,1,len(dirs)))
+
+# calculate the timescales
+tser = pc.read_ts(datadir=dirs[0])
+par2 = pc.read_param(quiet=True, datadir=dirs[0], param2=True)
+pars = pc.read_param(quiet=True, datadir=dirs[0])
+vA0 = tser.brms[0]
+k0 = pars.kpeak_aa
+tau0 = (vA0*k0)**-1
 
 # Simple plot
 fig, ax  = newfig(0.45, ratio=0.75)
@@ -151,22 +165,33 @@ for dd in dirs:
     if args.verbose:
         print('clr: %.1f, %.1f, %.1f, %.1f' % clr)
     #ax.plot(t[tvals:], emax1, label=nu_string(dd), color=clr, linewidth=1.5)
-    ax.plot(t[1:], emax1[1:], label=nu_string(dd), color=clr, linewidth=1.5)
+    lbl = nu_string(dd)
+    if args.verbose:
+        print(lbl)
+    ax.plot(t[1:]/tau0, emax1[1:], label=lbl, color=clr, linewidth=1.5)
 
 ax.set_xscale('log')
 ax.set_yscale('log')
-ax.set_xlim(tstop,t[-1])
+if args.ddir == 'prandtl':
+    tlast = 300
+else:
+    tlast = 100
+ax.set_xlim(tstop/tau0,tlast/tau0)
+
+ts = .1 if args.ddir == 'visc' else 1
 if not args.helical:
-    ax.set_ylim(1e-1, 1e2)
+    ax.set_ylim(ts, 1e2)
+else:
+    ax.set_ylim(ts,1e4)
 #ax.set_yticks([10,20,50,100])
 #ax.set_yticklabels(['$10$','$20$','$50$','$100$'])
-if not args.helical:
-    ax.legend(loc='lower left', ncol=2, frameon=False)
-else:
-    ax.legend(loc='upper left', ncol=1, fancybox=True, framealpha=0.5)
+#if not args.helical:
+#    ax.legend(loc='lower left', ncol=2, frameon=False)
+#else:
+ax.legend(loc='upper left', ncol=1)#, fancybox=True, framealpha=0.5)
 #fig.suptitle('Wavenumber of Maximum ')
 
-ax.set_xlabel('time')
+ax.set_xlabel(r'time $t/\tau_0$')
 ax.set_ylabel(r'$E_{k\leq k_7}/E_0$')
 fig.tight_layout(pad=0.3)
 if args.helical:
